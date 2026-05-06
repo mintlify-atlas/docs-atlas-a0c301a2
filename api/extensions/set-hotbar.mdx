@@ -1,0 +1,53 @@
+---
+title: "SetHotbar — CPE extension API"
+description: "API reference for the SetHotbar extension: assign a specific block ID to one of the nine hotbar slots shown at the bottom of the client's screen."
+---
+
+`SetHotbar` lets you populate individual slots in a client's nine-slot hotbar. You can use it to pre-fill useful blocks when a player joins, or to update the hotbar dynamically as they move between areas.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `SetHotbar`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("SetHotbar")
+```
+
+## Static properties
+
+**`SetHotbar.setHotbarPacketIdentifier`** — `0x2d`. The packet type byte written at the start of every `setHotbar` packet.
+
+## Methods
+
+### `setHotbar`
+
+```javascript
+ext.setHotbar(blockId, hotbarIndex)
+```
+
+Sends a set hotbar packet that places `blockId` into the hotbar slot at `hotbarIndex`.
+
+<ParamField path="blockId" type="number" required>
+  The block ID to place in the hotbar slot (0–255).
+</ParamField>
+
+<ParamField path="hotbarIndex" type="number" required>
+  The hotbar slot to update. Valid values are `0` through `8`, where `0` is the leftmost slot.
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("SetHotbar")) {
+    const ext = client.extensions.get("SetHotbar")
+    // Pre-fill the hotbar with common building blocks
+    const defaultBlocks = [1, 4, 5, 7, 17, 18, 20, 44, 45]
+    defaultBlocks.forEach((blockId, index) => {
+      ext.setHotbar(blockId, index)
+    })
+  }
+})
+```

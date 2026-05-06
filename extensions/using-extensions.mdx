@@ -1,0 +1,126 @@
+---
+title: "Using CPE extensions in your server"
+description: "How to access negotiated CPE extensions through ExtensionManager, safely call extension methods, and add extensions from the extensions namespace."
+---
+
+Every `Client` instance exposes a `client.extensions` property that holds the CPE extensions negotiated for that connection. The property is an `ExtensionManager`, which is a `Map` subclass keyed by CPE extension name. You interact with extensions by retrieving them from this map and calling their methods.
+
+## The `ExtensionManager` class
+
+`ExtensionManager` extends the native JavaScript `Map`. Its `get(key)` method is overridden to throw an `Error` if the requested extension was not negotiated, instead of returning `undefined`. This makes accidental use of unavailable extensions fail loudly rather than silently.
+
+```js
+// Throws if "BlockDefinitions" was not negotiated
+const blockDefs = client.extensions.get("BlockDefinitions")
+
+// Safe check before accessing
+if (client.extensions.has("BlockDefinitions")) {
+  const blockDefs = client.extensions.get("BlockDefinitions")
+  blockDefs.defineBlock({ id: 50, name: "My Block", /* ... */ })
+}
+```
+
+You can also use a try/catch block if you prefer:
+
+```js
+try {
+  const blockDefs = client.extensions.get("BlockDefinitions")
+  blockDefs.defineBlock({ id: 50, name: "My Block", /* ... */ })
+} catch {
+  // Extension not supported by this client — skip gracefully
+}
+```
+
+## Waiting for extension negotiation
+
+By the time the `clientConnected` event fires, CPE negotiation is already complete. You can safely access `client.extensions` immediately inside your `clientConnected` handler.
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("BlockDefinitions")) {
+    const blockDefs = client.extensions.get("BlockDefinitions")
+    // Define custom blocks here
+  }
+})
+```
+
+If you need to react to negotiation in a lower-level way, listen for the `extensions` event directly on the client. It fires once with the array of negotiated extension descriptors:
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  client.on("extensions", (negotiatedExtensions) => {
+    console.log("Extensions ready:", negotiatedExtensions.map(e => e.name))
+  })
+})
+```
+
+<Note>
+  The `extensions` event fires before `clientConnected` completes. In practice you only need it for advanced use cases — your `clientConnected` handler has full access to `client.extensions` already.
+</Note>
+
+## The `BaseExtension` class
+
+All extension classes extend `BaseExtension`. The constructor takes a `Client` instance and a version number, and stores them as `this.client` and `this.version`. Every extension instance exposes:
+
+- `this.client` — the `Client` this extension belongs to
+- `this.version` — the negotiated extension version number
+- `static supportedVersions` — array of protocol versions the implementation handles (empty array in the base class)
+
+The `static supportedVersions` array is defined on each concrete extension class to declare which protocol versions the implementation handles. The base class defines it as an empty array.
+
+You do not instantiate extension classes yourself — the library constructs them automatically during negotiation.
+
+## Importing extension classes
+
+Extension classes are available from the `extensions` named export of the package:
+
+```js
+import { extensions } from "classicborne-server-protocol"
+
+// Access individual classes
+const { BlockDefinitions, LevelEnvironment, ExtendedPlayerList } = extensions
+```
+
+In most cases you will not need to import extension classes at all — you retrieve extension instances from `client.extensions` rather than constructing them.
+
+## Example: defining a custom block after negotiation
+
+The following example waits for the `clientConnected` event, checks that the client supports `BlockDefinitions`, and sends a custom block definition:
+
+```js
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+
+server.on("clientConnected", async (client, authInfo) => {
+  client.serverIdentification("My Server", "Welcome!", 0x00)
+  await client.loadLevel(levelBuffer, 256, 64, 256, true)
+  client.configureSpawn(0, authInfo.username, 128, 32, 128, 0, 0)
+
+  if (client.extensions.has("BlockDefinitions")) {
+    const blockDefs = client.extensions.get("BlockDefinitions")
+    blockDefs.defineBlock({
+      id: 50,
+      name: "Glass Pane",
+      collision: 2,
+      speed: 128,
+      topTexture: 12,
+      sideTexture: 12,
+      bottomTexture: 12,
+      transmitLight: 1,
+      walkSound: 1,
+      fullBright: 0,
+      shape: 16,
+      draw: 1,
+      fogDensity: 0,
+      fogR: 0,
+      fogG: 0,
+      fogB: 0,
+    })
+  }
+})
+```
+
+<Note>
+  Several methods on the `Client` class (such as `defineBlock`, `setInventoryOrder`, and `texturePackUrl`) are deprecated in favour of the extension API. Prefer using extension instances from `client.extensions` rather than the deprecated client methods. See the [Client reference](/concepts/client) for the full list of deprecated methods.
+</Note>

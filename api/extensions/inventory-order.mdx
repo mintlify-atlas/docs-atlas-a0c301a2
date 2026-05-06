@@ -1,0 +1,48 @@
+---
+title: "InventoryOrder — CPE extension API"
+description: "API reference for the InventoryOrder extension: reorder a client's block inventory slots to control the visual arrangement of blocks in the hotbar tray."
+---
+
+`InventoryOrder` lets you rearrange a client's inventory display. By mapping a block ID to an inventory order position, you control the order blocks appear in the client's block selection tray without changing which blocks are available.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `InventoryOrder`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("InventoryOrder")
+```
+
+## Methods
+
+### `setInventoryOrder`
+
+```javascript
+ext.setInventoryOrder(id, order)
+```
+
+Sends an inventory order packet (packet ID `44`) that places block `id` at position `order` in the client's block selection tray.
+
+<ParamField path="id" type="number" required>
+  The block ID to reposition (0–255).
+</ParamField>
+
+<ParamField path="order" type="number" required>
+  The target slot position in the inventory tray. `0` moves the block to the first slot.
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("InventoryOrder")) {
+    const ext = client.extensions.get("InventoryOrder")
+    // Place stone (1) first, grass (2) second, dirt (3) third
+    ext.setInventoryOrder(1, 0)
+    ext.setInventoryOrder(2, 1)
+    ext.setInventoryOrder(3, 2)
+  }
+})
+```

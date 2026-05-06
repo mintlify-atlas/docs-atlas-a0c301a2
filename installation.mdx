@@ -1,0 +1,109 @@
+---
+title: "Installing classicborne-server-protocol"
+description: "Requirements, installation commands, and all named import signatures for adding classicborne-server-protocol to your Node.js project."
+---
+
+`classicborne-server-protocol` is published to npm and requires Node.js with ES module support. This page covers everything you need to add the library to a new or existing project.
+
+## Requirements
+
+- **Node.js** — any version with native ES module support (Node.js 12.20+ or 14.13+)
+- **ES module project** — the library ships as `.mjs` files and must be imported using ES module syntax
+
+<Note>
+`classicborne-server-protocol` is ESM-only. CommonJS `require()` is not supported. You must either use `.mjs` file extensions or set `"type": "module"` in your `package.json`.
+</Note>
+
+## Setting up your project
+
+If you are starting from scratch, initialise a new project and enable ES modules:
+
+```bash
+npm init -y
+```
+
+Then open `package.json` and add `"type": "module"`:
+
+```json package.json
+{
+  "name": "my-classic-server",
+  "version": "1.0.0",
+  "type": "module"
+}
+```
+
+## Installing the package
+
+Install `classicborne-server-protocol` using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install classicborne-server-protocol
+```
+```bash yarn
+yarn add classicborne-server-protocol
+```
+```bash pnpm
+pnpm add classicborne-server-protocol
+```
+</CodeGroup>
+
+The package has three runtime dependencies that are installed automatically: `smart-buffer`, `tiny-typed-emitter`, and `ws`. You do not need to install anything else.
+
+## Importing the library
+
+Import named exports from `"classicborne-server-protocol"`:
+
+```js server.mjs
+import { Server } from "classicborne-server-protocol"
+```
+
+### Available exports
+
+The package exposes the following named exports:
+
+| Export | Description |
+| --- | --- |
+| `Server` | Creates and manages the TCP server, emits `clientConnected` events |
+| `Client` | Represents a connected client; used to send packets |
+| `ExtensionManager` | Manages CPE extension state per client |
+| `TeleportBehavior` | Helper for the ExtEntityTeleport CPE extension |
+| `UpgradingHttpServer` | HTTP server that upgrades WebSocket connections to the TCP handler |
+| `DataTypes` | Utility class for protocol data type encoding (fixed-point shorts, padded strings) |
+| `CodePage437` | Encodes and decodes strings using the CP437 character set |
+| `extensions` | Namespace containing all 13 built-in CPE extension classes |
+
+Import multiple exports in a single statement:
+
+```js server.mjs
+import { Server, CodePage437, extensions } from "classicborne-server-protocol"
+```
+
+To access a specific CPE extension class from the `extensions` namespace:
+
+```js server.mjs
+import { extensions } from "classicborne-server-protocol"
+
+const { CustomBlocks, LevelEnvironment } = extensions
+```
+
+## Verifying the installation
+
+Create a file called `server.mjs` with the following content and run it:
+
+```js server.mjs
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+console.log("Server listening on port 25565")
+```
+
+```bash
+node server.mjs
+```
+
+If you see `Server listening on port 25565` without errors, the library is installed correctly.
+
+<Tip>
+See the [Quickstart](/quickstart) for a complete walkthrough that connects a client, loads a level, and spawns a player.
+</Tip>

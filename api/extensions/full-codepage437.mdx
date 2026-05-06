@@ -1,0 +1,38 @@
+---
+title: "FullCodePage437 — CPE extension API"
+description: "API reference for the FullCodePage437 extension: a marker CPE that signals the client supports all 256 CP437 glyphs, including control-character positions."
+---
+
+`FullCodePage437` is a marker extension. It carries no packet-sending methods. When a client negotiates this extension, it signals that it can render all 256 code points of Code Page 437, including the positions normally reserved for ASCII control characters (0x00–0x1F). Without this extension, those code points are often substituted with spaces or question marks.
+
+Checking for this extension before sending strings that use those code points prevents visual corruption on clients that only support the reduced character set.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `FullCP437`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("FullCodePage437")
+```
+
+## Usage
+
+`FullCodePage437` has no methods. Its presence in `client.extensions` is the signal. Use `client.extensions.has("FullCodePage437")` before sending strings that include characters from the control-code range.
+
+```javascript
+server.on("clientConnected", (client) => {
+  const supportsFullCP437 = client.extensions.has("FullCodePage437")
+
+  // Characters below 0x20 render correctly only on supporting clients
+  const fancyPrefix = supportsFullCP437 ? "\x01 " : "* "
+  client.message(`${fancyPrefix}Welcome to the server!`)
+})
+```
+
+<Note>
+  The `classicborne-server-protocol` library handles CP437 encoding internally via its `CodePage437` utility. Use `FullCodePage437` only to gate messages that intentionally use glyphs from the 0x00–0x1F range. See the [`CodePage437`](/api/codepage437) reference for encoding details.
+</Note>

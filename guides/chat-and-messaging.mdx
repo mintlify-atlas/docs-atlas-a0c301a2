@@ -1,0 +1,108 @@
+---
+title: "Sending and receiving chat messages"
+description: "How to send chat messages with color codes and automatic line splitting, receive incoming messages, broadcast to all clients, and kick players."
+---
+
+Minecraft Classic uses a simple text-based chat system where messages are sent as fixed-length 64-byte string packets. The library abstracts the packet details — you provide a string, and it handles encoding, splitting long messages across multiple packets, and writing to the socket.
+
+## Sending a message
+
+Call `client.message` to send a chat message to a specific client.
+
+```js
+client.message(message, messageType?, continueAdornment?)
+```
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `message` | `string` | — | The text to send. |
+| `messageType` | `number` | `-1` | The message type. Use `0` for normal chat. `-1` uses the protocol default. |
+| `continueAdornment` | `string` | `">"` | Prefix prepended to continuation lines when a message is split. Must be 63 characters or fewer. |
+
+```js server.mjs
+client.message("Hello, world!", 0)
+client.message("&aWelcome to Really Great!", 0)
+```
+
+Long messages are automatically split across multiple packets. Each continuation line is prefixed with the `continueAdornment` value.
+
+<Note>
+All strings are automatically CP437-encoded by the library before being sent. You do not need to encode them yourself.
+</Note>
+
+## Color codes
+
+Minecraft Classic supports color codes using the `&` prefix followed by a hex digit. Colors apply to all text that follows until another color code or the end of the message.
+
+| Code | Color |
+| --- | --- |
+| `&0` | Black |
+| `&1` | Dark blue |
+| `&2` | Dark green |
+| `&3` | Dark cyan |
+| `&4` | Dark red |
+| `&5` | Dark purple |
+| `&6` | Gold |
+| `&7` | Gray |
+| `&8` | Dark gray |
+| `&9` | Blue |
+| `&a` | Green |
+| `&b` | Cyan |
+| `&c` | Red |
+| `&d` | Light purple |
+| `&e` | Yellow |
+| `&f` | White |
+
+```js server.mjs
+client.message("&aYou've connected successfully!", 0)
+client.message("&cWarning: &fyou are in a restricted area.", 0)
+```
+
+## Receiving messages
+
+Listen for the `message` event on a client to receive chat messages the player sends.
+
+```js server.mjs
+client.on("message", (message) => {
+  console.log(`${authInfo.username}: ${message}`)
+})
+```
+
+The `message` value is the decoded string from the client's packet.
+
+## Broadcasting to all clients
+
+To send a message to every connected player, iterate over your player map and call `message` on each client:
+
+```js server.mjs
+const players = new Map()
+
+function broadcast(message, messageType) {
+  for (const [client] of players) {
+    client.message(message, messageType)
+  }
+}
+```
+
+The following pattern from `reallygreat.mjs` shows echoing a player's message back to them and then spamming additional lines:
+
+```js reallygreat.mjs
+client.on("message", (message) => {
+  if (message.includes("/")) return // ignore commands
+  client.message(`${authInfo.username}: ` + message, 0)
+})
+```
+
+## Disconnecting a client
+
+Call `client.disconnect` to send a kick packet and terminate the connection. The `message` argument is shown to the player as the reason for the kick.
+
+```js server.mjs
+client.disconnect("Kicked: rule violation")
+```
+
+The message is CP437-encoded and padded to the protocol's fixed string length automatically.
+
+<Tip>
+`client.disconnect` sends the kick packet but does not destroy the socket itself. Listen for the `close` event on the client to clean up any server-side state after the player leaves.
+</Tip>

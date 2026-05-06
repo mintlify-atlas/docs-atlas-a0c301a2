@@ -1,0 +1,47 @@
+---
+title: "ClickDistance — CPE extension API"
+description: "API reference for the ClickDistance extension: set the maximum block-interaction reach distance for a connected client using a signed 16-bit value."
+---
+
+`ClickDistance` controls how far away a player can interact with blocks. The distance is sent as a signed 16-bit integer in fixed-point units. Servers use this to expand reach for operators or to restrict it as a gameplay mechanic.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `ClickDistance`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("ClickDistance")
+```
+
+## Static properties
+
+**`ClickDistance.setClickDistancePacketIdentifier`** — `0x12`. The packet type byte written at the start of every `setClickDistance` packet.
+
+## Methods
+
+### `setClickDistance`
+
+```javascript
+ext.setClickDistance(distance)
+```
+
+Sends a click distance packet that updates the client's maximum reach.
+
+<ParamField path="distance" type="number" required>
+  Maximum reach distance as a signed 16-bit integer in fixed-point units. The standard reach in the vanilla client is `160` (5 blocks × 32 units). Set to `0` to prevent any block interaction.
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("ClickDistance")) {
+    const ext = client.extensions.get("ClickDistance")
+    const isOp = authInfo.userType === 0x64
+    // Give operators a 10-block reach, others get the vanilla 5-block reach
+    ext.setClickDistance(isOp ? 320 : 160)
+  }
+})
+```

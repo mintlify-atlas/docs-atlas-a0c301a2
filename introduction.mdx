@@ -1,0 +1,54 @@
+---
+title: "What is classicborne-server-protocol?"
+description: "An overview of the classicborne-server-protocol Node.js library for building Minecraft Classic servers with TCP, WebSocket, and CPE support."
+---
+
+`classicborne-server-protocol` is a low-level Node.js library that implements the Minecraft Classic server protocol. It handles TCP connections, optional WebSocket upgrades for ClassiCube browser clients, Classic Protocol Extension (CPE) negotiation, and all packet encoding — giving you a foundation to build on rather than a finished game.
+
+## What the library does
+
+The library sits between raw TCP sockets and your game logic. When a client connects, the library authenticates them, optionally negotiates CPE extensions, and emits a `clientConnected` event with a `Client` instance you can use to send packets. Everything above that — world state, player management, chat systems — is your responsibility to implement.
+
+This design keeps the library small and composable. You can build a minimal lobby server, a full survival world, or a creative tool, all on the same foundation.
+
+### Key features
+
+- **TCP server** — listens on any port (default `25565`) using Node.js's built-in `net` module
+- **WebSocket support** — accepts ClassiCube browser clients over WebSocket via `UpgradingHttpServer`, on the same port as TCP
+- **CPE negotiation** — automatically negotiates Classic Protocol Extensions with clients that support them
+- **13 built-in CPE extensions** — includes BlockDefinitions, BlockDefinitionsExt, CustomBlocks, ExtPlayerList, EntityProperty, LevelEnvironment (EnvMapAspect), ClickDistance, InventoryOrder, BlockPermissions, HeldBlock, SetHotbar, FullCP437, and ExtEntityTeleport
+- **CP437 encoding** — encodes and decodes strings using the Code Page 437 character set required by the Minecraft Classic protocol
+- **Level utilities** — `server.utils.processLevel` compresses and prepares level buffers for transmission
+
+### What the library does not include
+
+`classicborne-server-protocol` is intentionally a protocol library, not a server framework. It does not provide:
+
+- World or chunk storage
+- Player position tracking
+- Chat or command systems
+- Game mechanics of any kind
+
+For a batteries-included Minecraft Classic server built on this library, see [classicborne](https://classicborne.bunnynabbit.com/).
+
+## Who it's for
+
+This library is for developers who want to build Minecraft Classic compatible tools or servers in Node.js and need precise control over the protocol layer. If you are comfortable working with event emitters, Buffers, and low-level networking concepts, you will find the API straightforward.
+
+<Note>
+The library is ESM-only. Your project must use `"type": "module"` in `package.json`, or use `.mjs` file extensions.
+</Note>
+
+## Where to go next
+
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get a working server running in minutes using the minimal example.
+  </Card>
+  <Card title="Server concepts" icon="server" href="/concepts/server">
+    Understand how the Server class manages connections and CPE negotiation.
+  </Card>
+  <Card title="CPE extensions" icon="puzzle-piece" href="/extensions/overview">
+    Learn which extensions are built in and how to use them with clients.
+  </Card>
+</CardGroup>

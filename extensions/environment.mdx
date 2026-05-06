@@ -1,0 +1,115 @@
+---
+title: "Customising level environment with LevelEnvironment"
+description: "How to use the LevelEnvironment extension (EnvMapAspect CPE) to set texture packs and control sky, fog, clouds, and other environment properties."
+---
+
+The `LevelEnvironment` extension corresponds to the `EnvMapAspect` CPE and lets you customise two aspects of a client's environment: the texture pack it loads, and a set of visual properties such as edge height, cloud speed, and fog distance. Both can be set independently and multiple properties can be updated in a single call.
+
+## Accessing the extension
+
+Retrieve the `LevelEnvironment` instance from `client.extensions` after the `clientConnected` event fires:
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("LevelEnvironment")) {
+    const env = client.extensions.get("LevelEnvironment")
+    // Use env here
+  }
+})
+```
+
+<Note>
+  Call these methods after the `clientConnected` event fires. CPE negotiation is complete by that point and the extension is ready to use.
+</Note>
+
+## Setting a texture pack URL
+
+`texturePackUrl(url)` sends a URL to the client, which it uses to download and apply a custom texture pack:
+
+```js
+env.texturePackUrl("https://example.com/textures.zip")
+```
+
+<ParamField path="url" type="string">
+  The URL of the texture pack. The string is CP437-encoded and must be at most 64 characters long. Passing an empty string clears the texture pack and reverts to the default textures.
+</ParamField>
+
+<Tip>
+  Keep the URL short. The CP437 encoding and 64-character limit apply to the raw byte length of the encoded string, not the number of Unicode characters.
+</Tip>
+
+## Setting environment properties
+
+`setEnvironmentProperties(environment)` accepts an object whose keys are property names and whose values are integers. You can set any combination of properties in a single call — each key–value pair is sent as a separate packet:
+
+```js
+env.setEnvironmentProperties({
+  edgeHeight: 64,
+  cloudsHeight: 128,
+  cloudsSpeed: 256,
+})
+```
+
+<Tip>
+  You can pass multiple properties in a single `setEnvironmentProperties` call. The extension iterates the object and sends one packet per recognised property.
+</Tip>
+
+The available properties are:
+
+<ParamField path="sidesId" type="number">
+  Block ID used to render the sides of the map (the "bedrock" walls). Default is the standard bedrock block.
+</ParamField>
+
+<ParamField path="edgeId" type="number">
+  Block ID used to render the edge (horizon/water plane) of the map.
+</ParamField>
+
+<ParamField path="edgeHeight" type="number">
+  Y coordinate of the map's edge/water surface. Setting this changes the apparent horizon height.
+</ParamField>
+
+<ParamField path="cloudsHeight" type="number">
+  Y coordinate at which clouds are rendered.
+</ParamField>
+
+<ParamField path="maxFog" type="number">
+  Maximum fog distance in blocks. `0` uses the client's default.
+</ParamField>
+
+<ParamField path="cloudsSpeed" type="number">
+  Speed of cloud movement. The value is expressed as 256ths of a block per tick; `256` is normal speed.
+</ParamField>
+
+<ParamField path="weatherFade" type="number">
+  Speed at which weather (rain/snow) fades in and out. `128` is normal speed.
+</ParamField>
+
+<ParamField path="useExponentialFog" type="number">
+  Whether to use exponential fog instead of linear fog. `1` = exponential, `0` = linear.
+</ParamField>
+
+<ParamField path="sidesOffset" type="number">
+  Y offset applied to the sides block rendering relative to `edgeHeight`. Negative values make the sides extend below the water surface.
+</ParamField>
+
+Keys that are not in the recognised list are silently ignored.
+
+## Full example
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("LevelEnvironment")) {
+    const env = client.extensions.get("LevelEnvironment")
+
+    env.texturePackUrl("https://example.com/textures.zip")
+
+    env.setEnvironmentProperties({
+      edgeHeight: 32,
+      cloudsHeight: 96,
+      cloudsSpeed: 512,
+      maxFog: 128,
+      useExponentialFog: 1,
+    })
+  }
+})
+```

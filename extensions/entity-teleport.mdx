@@ -1,0 +1,181 @@
+---
+title: "Teleporting entities with ExtendedEntityTeleport"
+description: "How to use the ExtendedEntityTeleport extension and TeleportBehavior to move entities with configurable interpolation, move modes, and orientation control."
+---
+
+The `ExtendedEntityTeleport` extension corresponds to the `ExtEntityTeleport` CPE and provides a richer position-update packet than `Client.absolutePositionUpdate`. The key addition is a `TeleportBehavior` byte that controls whether the update affects position or orientation, how movement is interpolated, and whether the movement is absolute or relative.
+
+## Accessing the extension
+
+Retrieve the extension from `client.extensions` inside your `clientConnected` handler:
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("ExtendedEntityTeleport")) {
+    const teleport = client.extensions.get("ExtendedEntityTeleport")
+    // Use teleport here
+  }
+})
+```
+
+## Sending a position update
+
+`extendedPositionUpdate` sends an extended teleport packet for a given entity:
+
+```js
+teleport.extendedPositionUpdate(id, x, y, z, yaw, pitch, teleportBehavior)
+```
+
+<ParamField path="id" type="number">
+  The entity ID to update. Use `0` for the local player (the client receiving the packet).
+</ParamField>
+
+<ParamField path="x" type="number">
+  X coordinate in fixed-point units (1 block = 32 units).
+</ParamField>
+
+<ParamField path="y" type="number">
+  Y coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="z" type="number">
+  Z coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="yaw" type="number">
+  Horizontal rotation in units of 256/360 degrees.
+</ParamField>
+
+<ParamField path="pitch" type="number">
+  Vertical rotation in units of 256/360 degrees.
+</ParamField>
+
+<ParamField path="teleportBehavior" type="TeleportBehavior">
+  A `TeleportBehavior` instance describing how the position and orientation update is applied. See below.
+</ParamField>
+
+## The `TeleportBehavior` class
+
+`TeleportBehavior` encodes a single byte that the client uses to decide how to apply the position update. Construct one and configure it with the chainable setter methods before passing it to `extendedPositionUpdate`:
+
+```js
+import { TeleportBehavior } from "classicborne-server-protocol"
+
+const behavior = new TeleportBehavior()
+  .setAffectsPosition(true)
+  .setAffectsOrientation(true)
+  .setMoveMode(TeleportBehavior.moveMode.absoluteSmooth)
+```
+
+### Default values
+
+A freshly constructed `TeleportBehavior` has:
+
+| Property | Default |
+|---|---|
+| `affectsPosition` | `false` |
+| `affectsOrientation` | `false` |
+| `interpolatesOrientation` | `false` |
+| `moveMode` | `absoluteInstant` (0) |
+
+### `setAffectsPosition(affects?)`
+
+Whether the position values (`x`, `y`, `z`) in the update are applied to the entity. Defaults to `true` when called with no argument.
+
+```js
+behavior.setAffectsPosition(true)
+```
+
+### `setAffectsOrientation(affects?)`
+
+Whether the orientation values (`yaw`, `pitch`) in the update are applied to the entity. Defaults to `true` when called with no argument.
+
+```js
+behavior.setAffectsOrientation(true)
+```
+
+### `setInterpolatesOrientation(interpolates?)`
+
+Whether the client interpolates the orientation change smoothly instead of snapping. Only meaningful when `affectsOrientation` is `true`. Defaults to `true` when called with no argument.
+
+```js
+behavior.setInterpolatesOrientation(true)
+```
+
+### `setMoveMode(mode)`
+
+Controls how the position update is applied. Use one of the constants from `TeleportBehavior.moveMode`:
+
+```js
+behavior.setMoveMode(TeleportBehavior.moveMode.absoluteSmooth)
+```
+
+The available modes are:
+
+| Constant | Value | Description |
+|---|---|---|
+| `TeleportBehavior.moveMode.absoluteInstant` | `0` | Move instantly to the given absolute position |
+| `TeleportBehavior.moveMode.absoluteSmooth` | `1` | Interpolate smoothly to the given absolute position |
+| `TeleportBehavior.moveMode.relativeSmooth` | `2` | Add the position values to the entity's current position with interpolation |
+| `TeleportBehavior.moveMode.relativeInstant` | `3` | Add the position values to the entity's current position instantly |
+
+### `toBuffer()`
+
+Serialises the behavior to a 1-byte `Buffer`. This is called automatically by `extendedPositionUpdate` — you do not need to call it yourself unless you are constructing packets manually.
+
+### Method chaining
+
+All setter methods return `this`, so you can chain them:
+
+```js
+const behavior = new TeleportBehavior()
+  .setAffectsPosition(true)
+  .setAffectsOrientation(true)
+  .setInterpolatesOrientation(true)
+  .setMoveMode(TeleportBehavior.moveMode.absoluteSmooth)
+```
+
+## Difference from `Client.absolutePositionUpdate`
+
+`Client.absolutePositionUpdate(id, x, y, z, yaw, pitch)` sends the vanilla position-update packet. It always affects both position and orientation and always applies the update instantly. There is no interpolation and no way to send a relative offset.
+
+`ExtendedEntityTeleport.extendedPositionUpdate` replaces this with the CPE packet, giving you control over each of those aspects through `TeleportBehavior`. For clients that did not negotiate `ExtEntityTeleport`, fall back to `Client.absolutePositionUpdate`.
+
+## Complete example
+
+```js
+import { Server, TeleportBehavior } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+
+server.on("clientConnected", async (client, authInfo) => {
+  client.serverIdentification("My Server", "Welcome!", 0x00)
+  await client.loadLevel(levelBuffer, 256, 64, 256, true)
+  client.configureSpawn(0, authInfo.username, 128 * 32, 33 * 32, 128 * 32, 0, 0)
+
+  // Teleport the player smoothly to a new position after they load in
+  setTimeout(() => {
+    if (client.extensions.has("ExtendedEntityTeleport")) {
+      const teleport = client.extensions.get("ExtendedEntityTeleport")
+
+      const behavior = new TeleportBehavior()
+        .setAffectsPosition(true)
+        .setAffectsOrientation(false)
+        .setMoveMode(TeleportBehavior.moveMode.absoluteSmooth)
+
+      teleport.extendedPositionUpdate(
+        0,       // entity ID (0 = local player)
+        64 * 32, // x
+        33 * 32, // y
+        64 * 32, // z
+        0,       // yaw
+        0,       // pitch
+        behavior
+      )
+    } else {
+      // Fallback for clients without ExtEntityTeleport
+      client.absolutePositionUpdate(0, 64 * 32, 33 * 32, 64 * 32, 0, 0)
+    }
+  }, 3000)
+})
+```

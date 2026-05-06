@@ -1,0 +1,86 @@
+---
+title: "CodePage437 — classicborne-server-protocol API"
+description: "API reference for the CodePage437 class: static methods for encoding strings to CP437 buffers, decoding buffers back to strings, and the full character mapping."
+---
+
+`CodePage437` is a static utility class for converting between JavaScript strings and Code Page 437 byte buffers. The Minecraft Classic protocol encodes all text in CP437, so this class is used throughout the library wherever strings appear in packets. All members are static — you never instantiate `CodePage437`.
+
+```javascript
+import { CodePage437 } from "classicborne-server-protocol"
+```
+
+## Static methods
+
+### `CodePage437.to`
+
+```javascript
+CodePage437.to(str)
+```
+
+Converts a JavaScript string to a `Buffer` of bytes encoded in Code Page 437. Characters that do not exist in CP437 are replaced with `?` (byte `0x3F`).
+
+<ParamField path="str" type="string" required>
+  The string to encode. Each character is looked up in `CodePage437.mapping`; unrecognised characters become `?`.
+</ParamField>
+
+<ResponseField name="returns" type="Buffer">
+  A `Buffer` containing one byte per input character.
+</ResponseField>
+
+```javascript
+const bytes = CodePage437.to("Hello!")
+// <Buffer 48 65 6c 6c 6f 21>
+
+const withSpecial = CodePage437.to("♥ hearts")
+// ♥ is CP437 byte 0x03
+```
+
+<Warning>
+  Characters outside CP437 silently become `?`. If your input may contain non-CP437 characters and you need to detect them, check against `CodePage437.mapping` before calling `to`.
+</Warning>
+
+### `CodePage437.from`
+
+```javascript
+CodePage437.from(buffer)
+```
+
+Converts a `Buffer` of CP437-encoded bytes to a JavaScript string by mapping each byte through `CodePage437.mapping`.
+
+<ParamField path="buffer" type="Buffer" required>
+  A buffer containing CP437-encoded bytes. Each byte is used as an index into `CodePage437.mapping`.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  The decoded JavaScript string.
+</ResponseField>
+
+```javascript
+const str = CodePage437.from(Buffer.from([0x48, 0x65, 0x6c, 0x6c, 0x6f]))
+// "Hello"
+```
+
+## Static properties
+
+### `CodePage437.mapping`
+
+A 256-element array of strings that maps each byte value (0–255) to its Code Page 437 character. Both `0x00` and `0xFF` map to a space. This array is used directly by `to` and `from`.
+
+<ResponseField name="CodePage437.mapping" type="string[]">
+  256-element array. Index is the CP437 byte value; value is the corresponding Unicode character.
+</ResponseField>
+
+```javascript
+CodePage437.mapping[0x41]  // "A"
+CodePage437.mapping[0x03]  // "♥"
+CodePage437.mapping[0x00]  // " "  (space)
+CodePage437.mapping[0xFF]  // " "  (space)
+```
+
+You can use this array directly to check whether a character exists in CP437 before encoding:
+
+```javascript
+function isCP437(char) {
+  return CodePage437.mapping.includes(char)
+}
+```

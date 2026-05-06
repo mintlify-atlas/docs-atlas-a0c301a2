@@ -1,0 +1,133 @@
+---
+title: "The Server class: accepting Classic connections"
+description: "How to create and configure a Server instance, listen for authenticated clients, and customize CPE extensions and WebSocket support."
+---
+
+The `Server` class is the entry point for every `classicborne-server-protocol` application. It creates a TCP socket, starts listening on a port, and emits a `clientConnected` event each time a client finishes the Minecraft Classic authentication handshake. Everything before that event — TCP framing, CPE extension negotiation, connection timeouts — is handled for you.
+
+## Constructor
+
+```js
+new Server(port = 25565, host)
+```
+
+<ParamField path="port" type="number" default="25565">
+  The TCP port to listen on. Defaults to `25565`, the standard Minecraft Classic port.
+</ParamField>
+
+<ParamField path="host" type="string">
+  The network interface to bind to. When omitted, the server listens on all interfaces.
+</ParamField>
+
+The constructor is synchronous and begins listening immediately. You do not need to call a separate `listen()` method.
+
+```js
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+```
+
+## Key properties
+
+After creating a server you can customise its behaviour by setting properties before any client connects.
+
+<ParamField path="server.cpeEnabled" type="boolean" default="true">
+  Whether to attempt Classic Protocol Extension (CPE) negotiation with connecting clients. Set to `false` if you want to support only vanilla Classic clients with no CPE support.
+</ParamField>
+
+<ParamField path="server.appName" type="string" default='"Classicborne Protocol"'>
+  The application name sent to clients during CPE negotiation. Change this to identify your server implementation.
+</ParamField>
+
+<ParamField path="server.extensions" type="extension[]">
+  The list of CPE extensions the server advertises to clients. The default list includes 13 extensions: `ClickDistance`, `BlockDefinitions`, `BlockDefinitionsExt`, `InventoryOrder`, `CustomBlocks`, `EnvMapAspect`, `BlockPermissions`, `HeldBlock`, `ExtPlayerList`, `EntityProperty`, `SetHotbar`, `FullCP437`, and `ExtEntityTeleport`. You can replace or modify this array to advertise a different set.
+</ParamField>
+
+<ParamField path="server.connectionTimeout" type="number" default="30000">
+  How long (in milliseconds) to wait for a client to complete authentication before dropping the connection. Any socket that does not successfully authenticate within this window is destroyed automatically.
+</ParamField>
+
+<ParamField path="server.utils" type="object">
+  A reference to the `utils` module, which includes the `processLevel` helper for compressing level buffers before sending them to clients.
+</ParamField>
+
+```js
+const server = new Server(25565)
+
+server.appName = "My Classic Server"
+server.connectionTimeout = 15000  // 15 seconds
+```
+
+## The `clientConnected` event
+
+The server emits `clientConnected` when a client successfully completes the authentication handshake. If CPE is enabled and the client supports it, extension negotiation also completes before this event fires.
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  console.log(`${authInfo.username} connected`)
+})
+```
+
+The callback receives two arguments:
+
+<ParamField path="client" type="Client">
+  A fully authenticated [`Client`](/concepts/client) instance you can use to send packets.
+</ParamField>
+
+<ParamField path="authInfo" type="object">
+  Information from the authentication handshake.
+
+  - `authInfo.username` — the player's username as reported by the client
+  - `authInfo.key` — the session key for verifying identity against the Minecraft heartbeat API
+  - `authInfo.extensions` — the CPE extensions the client negotiated, or `undefined` if CPE was not used
+</ParamField>
+
+<Note>
+  The library does not verify the session key against an external service. If you want to authenticate players, compare `authInfo.key` against the ClassiCube or Minecraft heartbeat API yourself.
+</Note>
+
+## Static members
+
+`Server.maximumBufferSize` is the maximum number of bytes the library will buffer from a single client before destroying the connection. It defaults to `5000` and is not intended to be changed at runtime.
+
+`Server.tcpPacketHandler(client, data)` is the static method that parses incoming binary data and dispatches it to the correct packet handler on the client. It is called automatically by the server — you do not need to call it yourself, but it is public if you need it for testing or custom transport layers.
+
+## Setting up WebSocket support
+
+Call `server.setupWebSocketServer()` to enable WebSocket connections alongside TCP. The method returns a `Promise<UpgradingHttpServer>`.
+
+```js
+const server = new Server(25565)
+await server.setupWebSocketServer()
+// Now accepts both TCP and WebSocket connections on port 25565
+```
+
+See [WebSocket support](/concepts/websocket) for a full explanation of how WebSocket connections work and how to configure trusted proxy detection.
+
+## Customising the trusted WebSocket proxy
+
+The `server.isTrustedWebSocketProxy` property is a function that receives a remote IP address and returns `true` if that address is a trusted proxy. Trusted proxies cause the library to use the `x-forwarded-for` header as the client's real address instead of the proxy's IP.
+
+The default implementation trusts only ClassiCube's WebSocket proxy at `::ffff:34.223.5.250`. You can replace the function to trust additional proxies or disable trust entirely:
+
+```js
+server.isTrustedWebSocketProxy = (remoteAddress) => {
+  const trusted = ["::ffff:34.223.5.250", "::ffff:10.0.0.1"]
+  return trusted.includes(remoteAddress)
+}
+```
+
+<Warning>
+  Trusting an address you do not control lets that address forge the client IP reported on the `client.address` property. Only trust proxies you operate or that are documented as trustworthy.
+</Warning>
+
+## Connection timeout behaviour
+
+Every socket that connects to the server starts a timer. If the socket does not complete authentication before `server.connectionTimeout` milliseconds elapse, the socket is destroyed. The kick message is sent first if the socket appears to be a Classic client.
+
+This protects the server from connections that open a socket but never send data, such as port scanners.
+
+```js
+// Extend the timeout if your clients are on high-latency connections
+server.connectionTimeout = 60000  // 60 seconds
+```

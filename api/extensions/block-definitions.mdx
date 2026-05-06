@@ -1,0 +1,115 @@
+---
+title: "BlockDefinitions — CPE extension API"
+description: "API reference for the BlockDefinitions extension: send custom block definitions to a client using the ClassiCube Protocol Extension spec."
+---
+
+`BlockDefinitions` lets your server register custom block types on a connected client. Each call to `defineBlock` sends a single packet that tells the client how to render, collide with, and play sounds for a block ID that is not part of the vanilla set. This is one of the most-used CPE extensions in custom Minecraft Classic servers.
+
+This class extends `BaseExtension`, which means every instance exposes a `client` property pointing to the owning `Client` and a `version` property indicating the negotiated extension version.
+
+**CPE name:** `BlockDefinitions`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("BlockDefinitions")
+```
+
+## Static properties
+
+**`BlockDefinitions.defineBlockPacketIdentifier`** — `0x23`. The packet type byte written at the start of every `defineBlock` packet.
+
+## Methods
+
+### `defineBlock`
+
+```javascript
+ext.defineBlock(block)
+```
+
+Sends a block definition packet for the given block descriptor object. All fields that are omitted fall back to sensible defaults.
+
+<ParamField path="block.id" type="number" required>
+  The block ID to define (0–255).
+</ParamField>
+
+<ParamField path="block.name" type="string" default='""'>
+  Display name for the block, up to 64 characters. Encoded as CP437.
+</ParamField>
+
+<ParamField path="block.collision" type="number" default="2">
+  Collision behaviour. `0` = no collision, `1` = solid, `2` = normal.
+</ParamField>
+
+<ParamField path="block.speed" type="number" default="128">
+  Movement speed modifier when walking on or through the block. `128` is normal speed.
+</ParamField>
+
+<ParamField path="block.topTexture" type="number" default="0">
+  Texture index for the top face of the block.
+</ParamField>
+
+<ParamField path="block.sideTexture" type="number" default="0">
+  Texture index shared by all four side faces of the block.
+</ParamField>
+
+<ParamField path="block.bottomTexture" type="number" default="0">
+  Texture index for the bottom face of the block.
+</ParamField>
+
+<ParamField path="block.transmitLight" type="number" default="0">
+  Whether the block transmits light. `0` = opaque, `1` = transparent.
+</ParamField>
+
+<ParamField path="block.walkSound" type="number" default="0">
+  Sound played when walking on the block. Values correspond to vanilla sound IDs.
+</ParamField>
+
+<ParamField path="block.fullBright" type="number" default="0">
+  Whether the block emits full brightness. `0` = no, `1` = yes.
+</ParamField>
+
+<ParamField path="block.shape" type="number" default="16">
+  Height of the block in units where `16` equals a full block.
+</ParamField>
+
+<ParamField path="block.draw" type="number" default="0">
+  Draw method. `0` = opaque, `1` = transparent, `2` = translucent, `3` = sprite, `4` = gas.
+</ParamField>
+
+<ParamField path="block.fogDensity" type="number" default="0">
+  Fog density when the player's camera is inside the block. `0` means no fog.
+</ParamField>
+
+<ParamField path="block.fogR" type="number" default="0">
+  Red component of the fog colour (0–255).
+</ParamField>
+
+<ParamField path="block.fogG" type="number" default="0">
+  Green component of the fog colour (0–255).
+</ParamField>
+
+<ParamField path="block.fogB" type="number" default="0">
+  Blue component of the fog colour (0–255).
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("BlockDefinitions")) {
+    const ext = client.extensions.get("BlockDefinitions")
+    ext.defineBlock({
+      id: 50,
+      name: "Glowstone",
+      collision: 1,
+      topTexture: 12,
+      sideTexture: 12,
+      bottomTexture: 12,
+      transmitLight: 1,
+      fullBright: 1,
+      draw: 0,
+    })
+  }
+})
+```

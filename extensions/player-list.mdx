@@ -1,0 +1,148 @@
+---
+title: "Managing the player list with ExtendedPlayerList"
+description: "How to use the ExtendedPlayerList extension (ExtPlayerList CPE) to manage tab-list entries and spawn entities with custom skins independently."
+---
+
+The `ExtendedPlayerList` extension corresponds to the `ExtPlayerList` CPE (version 2) and decouples two things that are linked in the vanilla protocol: the player list shown in the tab overlay and the entities present in the world. When this extension is negotiated, you manage player list entries and entity spawning separately, giving you fine-grained control over what each client sees.
+
+## Accessing the extension
+
+Retrieve the extension from `client.extensions` inside your `clientConnected` handler:
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("ExtendedPlayerList")) {
+    const playerList = client.extensions.get("ExtendedPlayerList")
+    // Use playerList here
+  }
+})
+```
+
+## Spawning an entity
+
+When `ExtPlayerList` is negotiated, use `ExtendedPlayerList.configureSpawn` instead of `Client.configureSpawn` to spawn an entity. The difference is that this method accepts a `skin` string, which the client uses to determine the entity's skin:
+
+```js
+playerList.configureSpawn(id, username, x, y, z, yaw, pitch, skin)
+```
+
+<ParamField path="id" type="number">
+  The entity ID. Use `0` for the local player.
+</ParamField>
+
+<ParamField path="username" type="string">
+  The display name shown above the entity's head.
+</ParamField>
+
+<ParamField path="x" type="number">
+  X coordinate in fixed-point units (1 block = 32 units).
+</ParamField>
+
+<ParamField path="y" type="number">
+  Y coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="z" type="number">
+  Z coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="yaw" type="number">
+  Horizontal rotation in units of 256/360 degrees.
+</ParamField>
+
+<ParamField path="pitch" type="number">
+  Vertical rotation in units of 256/360 degrees.
+</ParamField>
+
+<ParamField path="skin" type="string">
+  A username or URL that the client interprets as the entity's skin. Behaviour depends on the client — ClassiCube accepts usernames to load player skins and URLs to load custom skin textures.
+</ParamField>
+
+<Warning>
+  When `ExtPlayerList` is negotiated, do not call `client.configureSpawn`. Use `ExtendedPlayerList.configureSpawn` instead. The vanilla `configureSpawn` sends a different packet format that does not include the skin string.
+</Warning>
+
+## Adding a player list entry
+
+`addPlayerName` adds or updates an entry in the tab player list. The list entry ID does not need to match any entity ID — you can have list entries for players who are not currently spawned in the world, and vice versa:
+
+```js
+playerList.addPlayerName(id, username, listName, groupName, groupOrder)
+```
+
+<ParamField path="id" type="number">
+  An identifier for this list entry. Must be unique per entry. Does not need to match an entity ID.
+</ParamField>
+
+<ParamField path="username" type="string">
+  The name used for tab completions in the chat input.
+</ParamField>
+
+<ParamField path="listName" type="string">
+  The name displayed in the player list tab overlay.
+</ParamField>
+
+<ParamField path="groupName" type="string" default='""'>
+  The group name shown as a header above this entry in the player list. Entries with the same group name are grouped together. Defaults to an empty string (no group).
+</ParamField>
+
+<ParamField path="groupOrder" type="number" default="0">
+  Controls the order of groups relative to one another. Higher values sort later. Defaults to `0`.
+</ParamField>
+
+Calling `addPlayerName` with an `id` that already exists updates the existing entry.
+
+## Removing a player list entry
+
+`removePlayerName(id)` removes the entry with the given ID from the player list tab:
+
+```js
+playerList.removePlayerName(id)
+```
+
+<ParamField path="id" type="number">
+  The ID of the list entry to remove.
+</ParamField>
+
+## Complete example
+
+The following example spawns the connecting player and adds them to the player list, grouped under "Players":
+
+```js
+server.on("clientConnected", async (client, authInfo) => {
+  client.serverIdentification("My Server", "Welcome!", 0x00)
+  await client.loadLevel(levelBuffer, 256, 64, 256, true)
+
+  if (client.extensions.has("ExtendedPlayerList")) {
+    const playerList = client.extensions.get("ExtendedPlayerList")
+
+    // Spawn the local player using the extended method
+    playerList.configureSpawn(
+      0,
+      authInfo.username,
+      128 * 32,  // x in fixed-point units
+      33 * 32,   // y in fixed-point units
+      128 * 32,  // z in fixed-point units
+      0,
+      0,
+      authInfo.username  // use the username as the skin
+    )
+
+    // Add this player to the tab list
+    playerList.addPlayerName(
+      0,
+      authInfo.username,
+      authInfo.username,
+      "Players",
+      0
+    )
+  } else {
+    // Fallback for clients without ExtPlayerList support
+    client.configureSpawn(0, authInfo.username, 128 * 32, 33 * 32, 128 * 32, 0, 0)
+  }
+})
+```
+
+<Tip>
+  Use separate IDs for the player list entries and entity IDs if you want to display entries for offline players, spectators, or other non-entity items in the tab list without having corresponding spawned entities.
+</Tip>

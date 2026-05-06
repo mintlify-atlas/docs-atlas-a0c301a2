@@ -1,0 +1,32 @@
+---
+title: "HeldBlock — CPE extension API"
+description: "API reference for the HeldBlock extension: a marker CPE that enables the server to read which block ID a client currently holds in their hand."
+---
+
+`HeldBlock` is a marker extension. It carries no packet-sending methods. When a client negotiates this extension, it begins sending `HoldThis` packets to the server whenever the player changes the block they are holding. The library's packet handler infrastructure processes those incoming packets; the extension object itself simply signals that the feature is active.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `HeldBlock`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("HeldBlock")
+```
+
+## Usage
+
+`HeldBlock` has no methods. Check `client.extensions.has("HeldBlock")` to know whether the client is reporting held-block changes, then listen for the relevant packet event to read the held block ID.
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("HeldBlock")) {
+    // The client will now send HoldThis packets when the held block changes.
+    // Handle those packets via a registered packet handler.
+    console.log("Client supports HeldBlock — held-block tracking active.")
+  }
+})
+```

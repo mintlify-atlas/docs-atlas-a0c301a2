@@ -1,0 +1,100 @@
+---
+title: "DataTypes — classicborne-server-protocol API"
+description: "API reference for the DataTypes utility class: static methods for reading and writing CP437 strings, fixed-point short integers, and the space byte constant."
+---
+
+`DataTypes` is a static utility class for reading and writing the binary types used in the Minecraft Classic protocol. It handles the two representations that appear most frequently in packet buffers: 64-byte CP437-encoded strings padded with spaces, and 16-bit fixed-point integers that represent world coordinates. All members are static — you never instantiate `DataTypes`.
+
+```javascript
+import { DataTypes } from "classicborne-server-protocol"
+```
+
+## Static methods
+
+### `DataTypes.readString`
+
+```javascript
+DataTypes.readString(buffer)
+```
+
+Reads a 64-byte CP437-encoded string from a `SmartBuffer` and returns it as a JavaScript string with trailing spaces trimmed.
+
+<ParamField path="buffer" type="SmartBuffer" required>
+  The buffer to read from. The read cursor advances by 64 bytes.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  The decoded string with trailing whitespace removed.
+</ResponseField>
+
+```javascript
+const username = DataTypes.readString(incomingBuffer)
+```
+
+### `DataTypes.readFixedShort`
+
+```javascript
+DataTypes.readFixedShort(buffer)
+```
+
+Reads an unsigned 16-bit big-endian integer from a `SmartBuffer` and converts it from the Minecraft Classic fixed-point format (1/32 units per integer step) to a plain JavaScript `number`. Handles the two's complement sign bit so negative coordinates are returned correctly.
+
+<ParamField path="buffer" type="SmartBuffer" required>
+  The buffer to read from. The read cursor advances by 2 bytes.
+</ParamField>
+
+<ResponseField name="returns" type="number">
+  The coordinate value in block units. One block equals 32 fixed-point units, so a value of `64` in the packet becomes `2.0`.
+</ResponseField>
+
+```javascript
+const x = DataTypes.readFixedShort(incomingBuffer)  // e.g. 4.0 from packet value 128
+```
+
+### `DataTypes.fixedShort`
+
+```javascript
+DataTypes.fixedShort(number)
+```
+
+Converts a plain JavaScript number (a world coordinate) to the 16-bit fixed-point integer value expected by the Minecraft Classic protocol. Multiplies by 32, rounds to the nearest integer, and handles the sign bit using bitwise operations.
+
+<ParamField path="number" type="number" required>
+  The coordinate value in block units to encode.
+</ParamField>
+
+<ResponseField name="returns" type="number">
+  A 16-bit integer suitable for writing to a packet buffer with `writeUInt16BE`.
+</ResponseField>
+
+```javascript
+buffer.writeUInt16BE(DataTypes.fixedShort(4.0))   // writes 128
+buffer.writeUInt16BE(DataTypes.fixedShort(-2.0))  // writes 65472
+```
+
+### `DataTypes.padString`
+
+```javascript
+DataTypes.padString(string)
+```
+
+Encodes a string as CP437 and pads or truncates it to exactly 64 bytes by appending space bytes (`0x20`). This is the format expected for all string fields in Minecraft Classic packets.
+
+<ParamField path="string" type="string" required>
+  The string to encode. Characters not in CP437 are replaced with `?`.
+</ParamField>
+
+<ResponseField name="returns" type="Buffer">
+  A 64-byte `Buffer` containing the CP437-encoded string padded with spaces.
+</ResponseField>
+
+```javascript
+const nameBytes = DataTypes.padString("Alice")
+// 64-byte Buffer: [0x41, 0x6C, 0x69, 0x63, 0x65, 0x20, 0x20, ... (59 more spaces)]
+```
+
+## Static properties
+
+<ParamField path="DataTypes.spaceCharacterByte" type="number" default="0x20">
+  The byte value used as the padding character in `padString`. Equal to `32` (the ASCII/CP437 space character).
+</ParamField>

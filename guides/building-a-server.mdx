@@ -1,0 +1,272 @@
+---
+title: "Building a Minecraft Classic server from scratch"
+description: "A complete, practical guide to handling connections, loading levels, tracking players, and broadcasting block changes and chat in a working multiplayer server."
+---
+
+`classicborne-server-protocol` is a low-level network library. It handles the wire protocol for you — parsing packets, encoding strings, compressing level data — but game logic is entirely your responsibility. This guide walks you through everything you need to build a working multiplayer Minecraft Classic server from scratch.
+
+## Planning your server
+
+Before writing code, decide what state your server must maintain:
+
+- **Level data** — a `Buffer` of block type IDs shared across all players.
+- **Connected clients** — a `Map` (or similar structure) so you can broadcast events to every player.
+- **Player identity** — each `Client` carries the `authInfo.username` provided at connection time.
+
+You also need to handle at least these events:
+
+| Event | Source | Purpose |
+| --- | --- | --- |
+| `clientConnected` | `server` | A player has authenticated and is ready to receive packets. |
+| `setBlock` | `client` | A player placed or broke a block. |
+| `message` | `client` | A player sent a chat message. |
+| `close` | `client` | A player disconnected. |
+
+## Setting up the server
+
+Create a `Server` instance and pass the port you want to listen on. The TCP server starts listening immediately.
+
+```js server.mjs
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+```
+
+If you also want to accept browser clients over WebSocket, call `setupWebSocketServer` after construction. It returns a Promise that resolves once the HTTP upgrade server is ready.
+
+```js server.mjs
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+await server.setupWebSocketServer()
+```
+
+<Note>
+WebSocket connections share the same port as TCP connections. You do not need to open a second port.
+</Note>
+
+## Generating level data
+
+Level data is a flat `Buffer` where each byte is a block type ID. Blocks are stored in YZX order: the index for a block at `(x, y, z)` in a world with dimensions `(sizeX, sizeY, sizeZ)` is:
+
+```
+index = x + sizeZ * (z + sizeX * y)
+```
+
+Allocate an all-air world with `Buffer.alloc`, then fill in whatever terrain you want:
+
+```js server.mjs
+const bounds = { x: 256, y: 256, z: 256 }
+const level = Buffer.alloc(bounds.x * bounds.y * bounds.z)
+
+// Helper: write a block at (x, y, z)
+function setBlock(x, y, z, type) {
+  level[x + bounds.z * (z + bounds.x * y)] = type
+}
+
+// Flat stone floor at y=0
+for (let x = 0; x < bounds.x; x++) {
+  for (let z = 0; z < bounds.z; z++) {
+    setBlock(x, 0, z, 1) // 1 = Stone
+  }
+}
+```
+
+Common block type IDs: `0` Air, `1` Stone, `2` Grass, `3` Dirt, `4` Cobblestone, `7` Bedrock.
+
+Before sending the level to clients, compress it with `processLevel`. Do this once at startup so you pay the compression cost only once regardless of how many clients connect.
+
+```js server.mjs
+const processedLevel = server.utils.processLevel(
+  level,
+  bounds.x,
+  bounds.y,
+  bounds.z
+)
+// processedLevel is a Promise<Buffer> — await it in the connection handler
+```
+
+## Tracking connected players
+
+Maintain a `Map` keyed by client (or a player ID) so you can broadcast to all connected players later.
+
+```js server.mjs
+const players = new Map()
+let nextPlayerId = 1
+```
+
+## Handling connections
+
+Listen for `clientConnected` on the server. This event fires after CPE negotiation completes and the client is ready to receive game packets.
+
+```js server.mjs
+server.on("clientConnected", async (client, authInfo) => {
+  const playerId = nextPlayerId++
+  players.set(client, { id: playerId, username: authInfo.username })
+
+  // 1. Identify the server to the client
+  client.serverIdentification("My Server", "Welcome!", 0x00)
+
+  // 2. Send the level
+  await client.loadLevel(
+    await processedLevel,
+    bounds.x,
+    bounds.y,
+    bounds.z,
+    true // already processed — skip internal compression
+  )
+
+  // 3. Spawn the player
+  client.configureSpawn(0, authInfo.username, 128, 1, 128, 0, 0)
+
+  // 4. Announce to others
+  broadcast(client, `${authInfo.username} joined the game.`, 0)
+
+  // Handle disconnection
+  client.on("close", () => {
+    players.delete(client)
+    broadcast(null, `${authInfo.username} left the game.`, 0)
+  })
+})
+```
+
+<Tip>
+Pass `0` as the player ID and `authInfo.username` as the name in `configureSpawn` to spawn the connecting player as themselves. IDs `1`–`127` and `-128`–`-1` are for other players you spawn in the world.
+</Tip>
+
+## Broadcasting messages
+
+A broadcast helper iterates over all connected clients and sends them a message, optionally skipping the sender:
+
+```js server.mjs
+function broadcast(sender, message, messageType) {
+  for (const [client] of players) {
+    if (client === sender) continue
+    client.message(message, messageType)
+  }
+}
+```
+
+## Handling block changes
+
+When a player places or breaks a block, the client sends a `setBlock` event. Update your shared level buffer, then broadcast the change to every other connected player with `client.setBlock`.
+
+```js server.mjs
+server.on("clientConnected", async (client, authInfo) => {
+  // ... setup code above ...
+
+  client.on("setBlock", ({ x, y, z, mode, type }) => {
+    // mode 1 = place, mode 0 = break
+    const blockType = mode === 1 ? type : 0
+    level[x + bounds.z * (z + bounds.x * y)] = blockType
+
+    // Confirm the change to the sending client and broadcast to all others
+    for (const [other] of players) {
+      other.setBlock(blockType, x, y, z)
+    }
+  })
+})
+```
+
+<Note>
+The `setBlock` event is emitted by the vanilla packet handler for incoming block-change packets (packet `0x05`). The `client.setBlock()` method sends the outgoing block update packet (`0x06`) to the client.
+</Note>
+
+## Handling chat
+
+Listen for `message` on each client and broadcast it to all connected players:
+
+```js server.mjs
+client.on("message", (message) => {
+  // Filter commands if you need to
+  if (message.startsWith("/")) {
+    handleCommand(client, authInfo, message)
+    return
+  }
+
+  const formatted = `${authInfo.username}: ${message}`
+  for (const [other] of players) {
+    other.message(formatted, 0)
+  }
+})
+```
+
+## Complete multiplayer example
+
+The following server brings together all the concepts above: level generation, player tracking, block changes, and chat.
+
+```js server.mjs
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+
+const bounds = { x: 256, y: 64, z: 256 }
+const level = Buffer.alloc(bounds.x * bounds.y * bounds.z)
+
+// Fill the bottom half with stone
+for (let x = 0; x < bounds.x; x++) {
+  for (let z = 0; z < bounds.z; z++) {
+    for (let y = 0; y < 32; y++) {
+      level[x + bounds.z * (z + bounds.x * y)] = y === 31 ? 2 : 1
+    }
+  }
+}
+
+const processedLevel = server.utils.processLevel(
+  level,
+  bounds.x,
+  bounds.y,
+  bounds.z
+)
+
+const players = new Map()
+
+server.on("clientConnected", async (client, authInfo) => {
+  players.set(client, authInfo.username)
+
+  client.serverIdentification("My Server", "A multiplayer world!", 0x00)
+  client.loadLevel(await processedLevel, bounds.x, bounds.y, bounds.z, true)
+  client.configureSpawn(0, authInfo.username, 128, 33, 128, 0, 0)
+
+  for (const [other] of players) {
+    other.message(`${authInfo.username} joined.`, 0)
+  }
+
+  client.on("setBlock", ({ x, y, z, mode, type }) => {
+    const blockType = mode === 1 ? type : 0
+    level[x + bounds.z * (z + bounds.x * y)] = blockType
+    for (const [other] of players) {
+      other.setBlock(blockType, x, y, z)
+    }
+  })
+
+  client.on("message", (message) => {
+    const formatted = `${authInfo.username}: ${message}`
+    for (const [other] of players) {
+      other.message(formatted, 0)
+    }
+  })
+
+  client.on("close", () => {
+    players.delete(client)
+    for (const [other] of players) {
+      other.message(`${authInfo.username} left.`, 0)
+    }
+  })
+})
+```
+
+<Warning>
+This library is intentionally low-level. It does not provide player physics, collision detection, anti-cheat, or permission management. You are responsible for all game logic on top of the protocol layer.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Level loading" icon="map" href="/guides/level-loading">
+    Learn more about level data format, pre-processing, and the loadLevel options.
+  </Card>
+  <Card title="Chat and messaging" icon="message-circle" href="/guides/chat-and-messaging">
+    Color codes, long message splitting, and the disconnect method.
+  </Card>
+</CardGroup>

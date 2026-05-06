@@ -1,0 +1,151 @@
+---
+title: "TeleportBehavior — classicborne-server-protocol API"
+description: "API reference for the TeleportBehavior class: chainable builder for the ExtEntityTeleport CPE byte controlling move mode, position, and orientation flags."
+---
+
+`TeleportBehavior` is a small builder class for the behavior byte used in the `ExtEntityTeleport` CPE packet. It encodes how a teleport should be interpreted by the client: whether it affects position, affects orientation, interpolates orientation smoothly, and what movement mode to use. All setter methods return `this` so calls can be chained.
+
+## Constructor
+
+```javascript
+new TeleportBehavior()
+```
+
+Creates an instance with default values: position and orientation are not affected, orientation is not interpolated, and the move mode is `absoluteInstant`.
+
+```javascript
+import { TeleportBehavior } from "classicborne-server-protocol"
+
+const behavior = new TeleportBehavior()
+  .setAffectsPosition()
+  .setMoveMode(TeleportBehavior.moveMode.absoluteSmooth)
+```
+
+## Instance properties
+
+The following properties are set by the builder methods and read by `toBuffer`.
+
+| Property | Type | Default |
+|---|---|---|
+| `æffectsPosition` | `boolean` | `false` |
+| `æffectsOrientation` | `boolean` | `false` |
+| `interpolatesOrientation` | `boolean` | `false` |
+| `moveMode` | `number` | `TeleportBehavior.moveMode.absoluteInstant` |
+
+## Methods
+
+All setter methods return `this` so they can be chained.
+
+### `setMoveMode`
+
+```javascript
+behavior.setMoveMode(mode?)
+```
+
+Sets the movement mode for the teleport.
+
+<ParamField path="mode" type="number" default="TeleportBehavior.moveMode.absoluteInstant">
+  One of the values from `TeleportBehavior.moveMode`. Defaults to `absoluteInstant`.
+</ParamField>
+
+<ResponseField name="returns" type="TeleportBehavior">
+  The same instance, for chaining.
+</ResponseField>
+
+### `setAffectsPosition`
+
+```javascript
+behavior.setAffectsPosition(affects?)
+```
+
+Controls whether the teleport packet updates the entity's position.
+
+<ParamField path="affects" type="boolean" default="true">
+  `true` to apply the position from the packet. Defaults to `true`.
+</ParamField>
+
+<ResponseField name="returns" type="TeleportBehavior">
+  The same instance, for chaining.
+</ResponseField>
+
+### `setAffectsOrientation`
+
+```javascript
+behavior.setAffectsOrientation(affects?)
+```
+
+Controls whether the teleport packet updates the entity's orientation (yaw and pitch).
+
+<ParamField path="affects" type="boolean" default="true">
+  `true` to apply the orientation from the packet. Defaults to `true`.
+</ParamField>
+
+<ResponseField name="returns" type="TeleportBehavior">
+  The same instance, for chaining.
+</ResponseField>
+
+### `setInterpolatesOrientation`
+
+```javascript
+behavior.setInterpolatesOrientation(interpolates?)
+```
+
+Controls whether the client smoothly interpolates the orientation change.
+
+<ParamField path="interpolates" type="boolean" default="true">
+  `true` to interpolate the orientation change. Defaults to `true`.
+</ParamField>
+
+<ResponseField name="returns" type="TeleportBehavior">
+  The same instance, for chaining.
+</ResponseField>
+
+### `toBuffer`
+
+```javascript
+behavior.toBuffer()
+```
+
+Encodes the current state of the instance into the single behavior byte required by the `ExtEntityTeleport` packet.
+
+<ResponseField name="returns" type="Buffer">
+  A 1-byte `Buffer` encoding the position flag, move mode, orientation flag, and interpolation flag.
+</ResponseField>
+
+```javascript
+const behavior = new TeleportBehavior()
+  .setAffectsPosition()
+  .setAffectsOrientation()
+  .setMoveMode(TeleportBehavior.moveMode.absoluteInstant)
+
+const byte = behavior.toBuffer() // <Buffer 13>
+```
+
+## Static properties
+
+### `TeleportBehavior.moveMode`
+
+An object containing the four move mode constants:
+
+<ResponseField name="absoluteInstant" type="number">
+  `0` — Move to the given position immediately, with no interpolation.
+</ResponseField>
+
+<ResponseField name="absoluteSmooth" type="number">
+  `1` — Move to the given position with smooth client-side interpolation.
+</ResponseField>
+
+<ResponseField name="relativeSmooth" type="number">
+  `2` — Move relative to the entity's current position with smooth interpolation.
+</ResponseField>
+
+<ResponseField name="relativeInstant" type="number">
+  `3` — Move relative to the entity's current position immediately, with no interpolation.
+</ResponseField>
+
+```javascript
+TeleportBehavior.moveMode.absoluteInstant  // 0
+TeleportBehavior.moveMode.absoluteSmooth   // 1
+TeleportBehavior.moveMode.relativeSmooth   // 2
+TeleportBehavior.moveMode.relativeInstant  // 3
+```

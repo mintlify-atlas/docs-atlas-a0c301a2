@@ -1,23 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "classicborne-server-protocol",
+  "projectType": "sdk-library",
+  "projectName": "classicborne-server-protocol",
+  "projectDescription": "A Node.js library for building Minecraft Classic servers with full Classic Protocol Extension (CPE) support.",
   "theme": "luma",
-  "colors": {
-    "primary": "#4CAF50",
-    "light": "#81C784",
-    "dark": "#2E7D32"
-  },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/BunnyNabbit/classicborne-server-protocol"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/BunnyNabbit/classicborne-server-protocol"
-    }
-  },
+  "primaryColor": "#4CAF50",
+  "lightColor": "#81C784",
+  "darkColor": "#2E7D32",
   "navigation": {
     "tabs": [
       {
@@ -97,5 +85,37 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Full Minecraft Classic server protocol implementation over TCP",
+    "WebSocket support for ClassiCube browser clients via UpgradingHttpServer",
+    "Classic Protocol Extension (CPE) negotiation and management",
+    "13 built-in CPE extensions including BlockDefinitions, ExtendedPlayerList, and more",
+    "Code Page 437 character encoding/decoding",
+    "Extensible architecture via BaseExtension for custom CPE extensions",
+    "Event-driven API using TypedEmitter for type-safe event handling"
+  ],
+  "publicApiSurface": [
+    "Server",
+    "Client",
+    "ExtensionManager",
+    "TeleportBehavior",
+    "UpgradingHttpServer",
+    "DataTypes",
+    "CodePage437",
+    "extensions.BlockDefinitions",
+    "extensions.BlockDefinitionsExtended",
+    "extensions.BlockPermissions",
+    "extensions.ClickDistance",
+    "extensions.CustomBlocks",
+    "extensions.EntityProperty",
+    "extensions.ExtendedEntityTeleport",
+    "extensions.ExtendedPlayerList",
+    "extensions.FullCodePage437",
+    "extensions.HeldBlock",
+    "extensions.InventoryOrder",
+    "extensions.LevelEnvironment",
+    "extensions.SetHotbar",
+    "processLevel (utils)"
+  ]
 }

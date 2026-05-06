@@ -1,133 +1,80 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
-icon: 'star'
+title: "classicborne-server-protocol: Minecraft Classic SDK"
+description: "A Node.js library for building Minecraft Classic servers with TCP and WebSocket support, plus full Classic Protocol Extension (CPE) negotiation."
 ---
 
-## Setting up
+`classicborne-server-protocol` is a low-level Node.js library that implements the Minecraft Classic server protocol. It handles TCP connections, WebSocket upgrades for ClassiCube browser clients, CPE negotiation, and packet I/O — so you can focus on building your game logic.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get a working Minecraft Classic server running in under 5 minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Core Concepts" icon="book" href="/concepts/server">
+    Understand Server, Client, and the event-driven connection model.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="CPE Extensions" icon="puzzle-piece" href="/extensions/overview">
+    Learn how Classic Protocol Extensions work and which ones are built in.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="code" href="/api/server">
+    Browse the full API for every exported class and method.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What it does
 
-Everything you need to create world-class documentation.
+The library provides everything needed to accept Minecraft Classic client connections and communicate using the Classic protocol:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+- **TCP server** — accepts raw socket connections on any port (default `25565`)
+- **WebSocket support** — serves ClassiCube browser clients over WebSocket via `UpgradingHttpServer`
+- **CPE negotiation** — automatically negotiates Classic Protocol Extensions with clients that support them
+- **13 built-in CPE extensions** — BlockDefinitions, ExtendedPlayerList, LevelEnvironment, and more
+- **Code Page 437** — encodes and decodes strings using the CP437 character set required by the protocol
 
-## Make your content agent ready
+<Note>
+This is a **low-level protocol library**, not a full server implementation. It handles networking and protocol encoding but does not provide game mechanics, world storage, or player management. For a batteries-included server, see [classicborne](https://classicborne.bunnynabbit.com/).
+</Note>
 
-Make your docs work for humans and AI agents alike.
+## Get started
 
-<Columns cols={2}>
-  <Card
-    title="Prompt component"
-    icon="robot"
-    href="/agent-ready/prompt"
-  >
-    Embed shareable AI prompts readers can copy or open in Cursor.
-  </Card>
-  <Card
-    title="Visibility"
-    icon="eye"
-    href="/agent-ready/visibility"
-  >
-    Show different content to humans and agents reading your docs.
-  </Card>
-  <Card
-    title="Contextual menu"
-    icon="bolt"
-    href="/agent-ready/contextual"
-  >
-    Give readers one-click access to Claude, ChatGPT, Cursor, and more.
-  </Card>
-  <Card
-    title="AI coding tools"
-    icon="wand-magic-sparkles"
-    href="/ai-tools/claude-code"
-  >
-    Set up Claude Code, Cursor, or Windsurf with Mintlify's skill.
-  </Card>
-</Columns>
+<Steps>
+  <Step title="Install the package">
+    Install `classicborne-server-protocol` from npm using your preferred package manager.
 
-## Need inspiration?
+    <CodeGroup>
+    ```bash npm
+    npm install classicborne-server-protocol
+    ```
+    ```bash yarn
+    yarn add classicborne-server-protocol
+    ```
+    ```bash pnpm
+    pnpm add classicborne-server-protocol
+    ```
+    </CodeGroup>
+  </Step>
+  <Step title="Create a server">
+    Import `Server` and create an instance on your chosen port.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    ```js server.mjs
+    import { Server } from "classicborne-server-protocol"
+    const server = new Server(25565)
+    ```
+  </Step>
+  <Step title="Handle connections">
+    Listen for the `clientConnected` event, send server identification, load a level, and configure the spawn point.
+
+    ```js server.mjs
+    const bounds = { x: 64, y: 64, z: 64 }
+    const levelData = Buffer.alloc(bounds.x * bounds.y * bounds.z)
+    const processedLevel = server.utils.processLevel(levelData, bounds.x, bounds.y, bounds.z)
+
+    server.on("clientConnected", async (client, authInfo) => {
+      client.serverIdentification("My Server", "Welcome!", 0x00)
+      client.loadLevel(await processedLevel, bounds.x, bounds.y, bounds.z, true)
+      client.configureSpawn(0, authInfo.username, 0, 0, 0, 0, 0)
+    })
+    ```
+  </Step>
+</Steps>
+
+Continue to the [Quickstart](/quickstart) for a complete walkthrough.

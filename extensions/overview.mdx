@@ -1,0 +1,78 @@
+---
+title: "Classic Protocol Extensions (CPE) overview"
+description: "An overview of CPE: how extension negotiation works and which of the 13 built-in extensions classicborne-server-protocol supports."
+---
+
+Classic Protocol Extensions (CPE) is an optional extension to the Minecraft Classic protocol that lets servers and clients negotiate additional features before gameplay begins. When a CPE-capable client connects, the server advertises the extensions it supports, the client replies with the subset it understands, and both sides agree on what to use. Extensions that were not agreed upon are silently skipped.
+
+## How negotiation works
+
+When a client connects and CPE is enabled (`server.cpeEnabled` is `true` by default), the library sends the server's extension list during the handshake. The client replies listing the extensions it supports. Once both sides have exchanged their lists, the `extensions` event fires on the `Client` instance with the final negotiated set.
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  client.on("extensions", (negotiatedExtensions) => {
+    console.log("Negotiated extensions:", negotiatedExtensions.map(e => e.name))
+  })
+})
+```
+
+<Note>
+  The `extensions` event fires before `clientConnected` completes its own event emission. By the time your `clientConnected` handler runs, negotiation is already done and `client.extensions` is populated.
+</Note>
+
+After negotiation, you access extensions through `client.extensions`, which is an [`ExtensionManager`](/extensions/using-extensions) instance. See [using extensions](/extensions/using-extensions) for how to retrieve and call extension methods safely.
+
+## Built-in extensions
+
+The server advertises 13 extensions by default. The table below lists each extension by its CPE protocol name, the `ExtensionManager` key used with `client.extensions.get()`, and what it does.
+
+| CPE name | `extensions.get()` key | Description |
+|---|---|---|
+| `ClickDistance` | `"ClickDistance"` | Sets the maximum reach distance for block interactions |
+| `BlockDefinitions` | `"BlockDefinitions"` | Defines custom blocks with basic geometry and textures |
+| `BlockDefinitionsExt` | `"BlockDefinitionsExtended"` | Extends `BlockDefinitions` with per-face textures and a custom bounding box |
+| `InventoryOrder` | `"InventoryOrder"` | Controls the order of blocks in the client's inventory |
+| `CustomBlocks` | `"CustomBlocks"` | Declares which custom block support level the client should use |
+| `EnvMapAspect` | `"LevelEnvironment"` | Sets the texture pack URL and environment properties (sky, fog, clouds) |
+| `BlockPermissions` | `"BlockPermissions"` | Controls which blocks players are allowed to place or delete |
+| `HeldBlock` | `"HeldBlock"` | Informs the server of the block currently held by the player |
+| `ExtPlayerList` | `"ExtendedPlayerList"` | Separates the player list tab from entity spawning |
+| `EntityProperty` | `"EntityProperty"` | Sets per-entity properties such as rotation offsets |
+| `SetHotbar` | `"SetHotbar"` | Assigns a block to a specific hotbar slot |
+| `FullCP437` | `"FullCodePage437"` | Enables the full Code Page 437 character set in strings |
+| `ExtEntityTeleport` | `"ExtendedEntityTeleport"` | Sends position updates with configurable interpolation and move modes |
+
+## Accessing a negotiated extension
+
+Use `client.extensions.get("key")` to retrieve an extension instance after negotiation. The key is the value from the `extensions.get() key` column in the table above — these are the class names the library uses internally, which differ from the CPE protocol names for some extensions.
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("LevelEnvironment")) {
+    const env = client.extensions.get("LevelEnvironment")
+    env.texturePackUrl("https://example.com/textures.zip")
+  }
+})
+```
+
+<Warning>
+  `client.extensions.get()` throws if the extension was not negotiated. Always check with `client.extensions.has()` first, or use a try/catch block. See [using extensions](/extensions/using-extensions) for safe access patterns.
+</Warning>
+
+## Customising the advertised extension list
+
+You can modify `server.extensions` before any clients connect to restrict which extensions are offered:
+
+```js
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+
+// Only advertise a subset of extensions
+server.extensions = server.extensions.filter(ext =>
+  ["BlockDefinitions", "CustomBlocks", "EnvMapAspect"].includes(ext.name)
+)
+```
+
+Clients that do not support CPE at all still connect normally — the library falls back to the vanilla protocol automatically.

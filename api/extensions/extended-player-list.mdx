@@ -1,0 +1,118 @@
+---
+title: "ExtendedPlayerList — CPE extension API"
+description: "API reference for ExtendedPlayerList: manage the tab-list independently from in-world entities, with group names, group ordering, and skin strings."
+---
+
+`ExtendedPlayerList` decouples the tab-list (player list) from entity spawning. When this extension is active, you manage list entries with `addPlayerName` and `removePlayerName` independently of the entities visible in the world. You also use `configureSpawn` instead of `Client.configureSpawn` because the extended variant accepts a string for the skin rather than relying on the username alone.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `ExtPlayerList`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("ExtendedPlayerList")
+```
+
+## Static properties
+
+**`ExtendedPlayerList.addPlayerNamePacketIdentifier`** — `0x16`.
+
+**`ExtendedPlayerList.removePlayerNamePacketIdentifier`** — `0x18`.
+
+## Methods
+
+### `addPlayerName`
+
+```javascript
+ext.addPlayerName(id, username, listName, groupName?, groupOrder?)
+```
+
+Adds an entry to the client's player list, or updates an existing entry if `id` is already present.
+
+<ParamField path="id" type="number" required>
+  The identifier for the player list entry. This does not need to match an entity ID visible in the level.
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  The player's real name, used for tab completions.
+</ParamField>
+
+<ParamField path="listName" type="string" required>
+  The display name shown in the player list. Can include colour codes.
+</ParamField>
+
+<ParamField path="groupName" type="string" default='""'>
+  The name of the group this entry belongs to in the player list.
+</ParamField>
+
+<ParamField path="groupOrder" type="number" default="0">
+  Sort order for the group. Lower values appear higher in the list.
+</ParamField>
+
+### `removePlayerName`
+
+```javascript
+ext.removePlayerName(id)
+```
+
+Removes the player list entry with the given `id`.
+
+<ParamField path="id" type="number" required>
+  The identifier of the entry to remove.
+</ParamField>
+
+### `configureSpawn`
+
+```javascript
+ext.configureSpawn(id, username, x, y, z, yaw, pitch, skin)
+```
+
+Creates an entity in the world. Use this instead of `Client.configureSpawn` when `ExtPlayerList` is active, because this variant accepts a `skin` string that clients use to fetch the entity's model texture.
+
+<ParamField path="id" type="number" required>
+  Entity ID. Use `-1` or `0` for the local player.
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  The player's display name. Encoded as CP437.
+</ParamField>
+
+<ParamField path="x" type="number" required>
+  X coordinate in fixed-point units (1 block = 32 units).
+</ParamField>
+
+<ParamField path="y" type="number" required>
+  Y coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="z" type="number" required>
+  Z coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="yaw" type="number" required>
+  Yaw angle as a byte (0–255).
+</ParamField>
+
+<ParamField path="pitch" type="number" required>
+  Pitch angle as a byte (0–255).
+</ParamField>
+
+<ParamField path="skin" type="string" required>
+  Skin identifier. Clients typically accept a username (to fetch the skin from the auth server) or a direct URL.
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("ExtendedPlayerList")) {
+    const ext = client.extensions.get("ExtendedPlayerList")
+    // Add to tab list
+    ext.addPlayerName(1, authInfo.username, `&b${authInfo.username}`, "Players", 0)
+    // Spawn the entity using the extended spawn method
+    ext.configureSpawn(1, authInfo.username, 128 * 32, 32 * 32, 128 * 32, 0, 0, authInfo.username)
+  }
+})
+```

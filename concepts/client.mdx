@@ -1,0 +1,201 @@
+---
+title: "The Client class: sending packets to players"
+description: "What a Client instance represents, which properties it exposes, and how to use its packet-sending methods to communicate with connected players."
+---
+
+A `Client` instance represents a single connected socket — TCP or WebSocket — that has either just connected or has fully authenticated. The `Server` creates `Client` instances automatically when sockets connect; you never instantiate `Client` directly. Your code interacts with clients through the instance passed to the `clientConnected` event.
+
+## Constructor
+
+```js
+new Client(socket, server)
+```
+
+The constructor is called internally by `Server`. The `socket` argument is either a Node.js `net.Socket` (TCP) or a `SocketImpostor` (WebSocket). The `server` argument is the `Server` instance that owns the connection.
+
+<Note>
+  Do not create `Client` instances yourself. Use the instance provided by the `clientConnected` event.
+</Note>
+
+## Key properties
+
+<ParamField path="client.socket" type="Socket | SocketImpostor">
+  The underlying network socket. For TCP connections this is a Node.js `net.Socket`; for WebSocket connections it is a `SocketImpostor` that wraps the WebSocket and exposes the same write interface.
+</ParamField>
+
+<ParamField path="client.server" type="Server">
+  The `Server` instance that owns this client.
+</ParamField>
+
+<ParamField path="client.authed" type="boolean">
+  Whether the client has completed the authentication handshake. This is `false` when the socket first connects and becomes `true` when `clientConnected` fires.
+</ParamField>
+
+<ParamField path="client.usingWebSocket" type="boolean">
+  Whether the connection was upgraded from TCP to WebSocket. Starts as `false` and becomes `true` after a successful WebSocket upgrade handshake.
+</ParamField>
+
+<ParamField path="client.address" type="string">
+  The remote IP address of the client. For direct TCP connections this is the socket's `remoteAddress`. For WebSocket connections through a trusted proxy (such as ClassiCube's proxy), it is the value of the `x-forwarded-for` header. Use this property instead of reading `socket.remoteAddress` directly.
+</ParamField>
+
+<ParamField path="client.extensions" type="ExtensionManager">
+  An `ExtensionManager` instance (a `Map` subclass) containing the CPE extension objects that were negotiated for this client. Use this to send CPE-specific packets. Accessing an extension that was not negotiated throws an error.
+</ParamField>
+
+<ParamField path="client.packetHandlers" type="Map<number, BasePacketHandler>">
+  A map from packet type byte to the handler object responsible for parsing that packet. The vanilla packet handlers are registered automatically. You can add custom handlers here if you need to process non-standard packets.
+</ParamField>
+
+## Events
+
+The `Client` class is an event emitter. It emits two events you can listen to:
+
+**`close`** — Fires when the socket is closed, whether cleanly or due to an error. Use this to clean up any state associated with the player in your game logic.
+
+```js
+client.on("close", () => {
+  console.log(`${authInfo.username} disconnected`)
+})
+```
+
+**`extensions`** — Fires when CPE extension negotiation is complete. The callback receives the array of extensions the client agreed to support.
+
+```js
+client.on("extensions", (extensions) => {
+  console.log("Client supports:", extensions.map(e => e.name))
+})
+```
+
+<Note>
+  By the time `clientConnected` fires, extension negotiation is already complete. You only need to listen for the `extensions` event if you need low-level control before `clientConnected`.
+</Note>
+
+## Packet-sending methods
+
+These methods write packets to the client's socket. Call them after `clientConnected` fires.
+
+### `serverIdentification`
+
+```js
+client.serverIdentification(serverName, motd, userType)
+```
+
+Sends the server identification packet. This is typically the first packet you send to a newly connected client.
+
+- `serverName` — the server's display name (up to 64 characters)
+- `motd` — the message of the day shown on the connection screen
+- `userType` — `0x00` for a normal user, `0x64` for operator (unlocks additional blocks in the client UI)
+
+### `loadLevel`
+
+```js
+await client.loadLevel(data, x, y, z, processed?, callback?, preFinalize?)
+```
+
+Streams a level to the client. The method sends a level initialise packet, then sends the data in 1024-byte chunks, then sends the level finalise packet.
+
+- `data` — a `Buffer` containing the level data
+- `x`, `y`, `z` — the dimensions of the level
+- `processed` — set to `true` if the buffer has already been run through `server.utils.processLevel`. Defaults to `false`, which causes `loadLevel` to process the buffer itself
+- `callback` — optional function called after the finalise packet is sent
+- `preFinalize` — optional function called just before the finalise packet is sent
+
+```js
+server.on("clientConnected", async (client, authInfo) => {
+  client.serverIdentification("My Server", "Welcome!", 0x00)
+  await client.loadLevel(levelBuffer, 256, 64, 256, true)
+  client.configureSpawn(0, authInfo.username, 128, 32, 128, 0, 0)
+})
+```
+
+### `configureSpawn`
+
+```js
+client.configureSpawn(id, username, x, y, z, yaw, pitch)
+```
+
+Sends the spawn player packet, placing a player entity in the world. Use `id` `0` and `authInfo.username` to spawn the local player.
+
+Coordinates are in fixed-point units (1 block = 32 units).
+
+### `message`
+
+```js
+client.message(message, messageType?, continueAdornment?)
+```
+
+Sends a chat message. Long messages are split automatically across multiple packets, with the continuation prefix prepended to each subsequent packet.
+
+- `message` — the message text (CP437 encoded automatically)
+- `messageType` — the message type byte. Defaults to `-1` (normal chat)
+- `continueAdornment` — the prefix prepended when a message wraps. Defaults to `">"`
+
+### `setBlock`
+
+```js
+client.setBlock(type, x, y, z)
+```
+
+Tells the client to update a block at the given coordinates. Use this to sync block changes in your world to a specific player.
+
+### `absolutePositionUpdate`
+
+```js
+client.absolutePositionUpdate(id, x, y, z, yaw, pitch)
+```
+
+Sends an absolute position and orientation update for an entity with the given `id`. Use this to teleport players or update another player's position in the client's view.
+
+### `despawnPlayer`
+
+```js
+client.despawnPlayer(id)
+```
+
+Removes the player entity with the given `id` from the client's view. Call this when a player leaves the server or moves out of range.
+
+### `updateUserType`
+
+```js
+client.updateUserType(userType)
+```
+
+Updates the client's user type without re-sending the full server identification packet. Use `0x00` for normal and `0x64` for operator.
+
+### `disconnect`
+
+```js
+client.disconnect(message)
+```
+
+Sends a disconnect (kick) packet with the given message, then the socket should be closed. The message is displayed to the player in the client UI.
+
+```js
+client.disconnect("You have been kicked.")
+```
+
+## Deprecated methods
+
+Several methods on `Client` are deprecated in favour of the CPE extension system. You may encounter them in older code:
+
+| Deprecated method | Replacement |
+|---|---|
+| `defineBlock(block)` | `BlockDefinitions` extension |
+| `defineBlockExt(block)` | `BlockDefinitionsExt` extension |
+| `removeBlockDefinition(blockId)` | `BlockDefinitions` extension |
+| `setInventoryOrder(id, order)` | `InventoryOrder` extension |
+| `customBlockSupport(level)` | `CustomBlocks` extension |
+| `texturePackUrl(url)` | `EnvMapAspect` extension |
+| `setEnvironmentProperties(env)` | `EnvMapAspect` extension |
+| `setBlockPermission(id, allow, del)` | `BlockPermissions` extension |
+| `configureSpawnExt(...)` | `ExtPlayerList` extension |
+| `addPlayerName(...)` | `ExtPlayerList` extension |
+| `removePlayerName(id)` | `ExtPlayerList` extension |
+| `setEntityProperty(id, type, val)` | `EntityProperty` extension |
+| `setHotbar(blockId, index)` | `SetHotbar` extension |
+| `extendedPositionUpdate(...)` | `ExtEntityTeleport` extension |
+
+<Warning>
+  Deprecated methods emit a runtime warning the first time they are called. Migrate to the extension API to avoid the warnings and to gain access to extension negotiation checks.
+</Warning>

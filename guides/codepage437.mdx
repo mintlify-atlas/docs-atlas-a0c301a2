@@ -1,0 +1,61 @@
+---
+title: "Code Page 437 character encoding"
+description: "How the library uses Code Page 437 for all string data, what the CodePage437 class provides, and how DataTypes.padString prepares fixed-length protocol strings."
+---
+
+Minecraft Classic encodes all string data using Code Page 437, the original IBM PC character set. It covers standard ASCII plus line-drawing characters, accented European letters, Greek letters, and various symbols. Any character outside this set cannot be represented in the protocol directly. The library handles CP437 encoding automatically for every packet method, so in most cases you do not need to call the encoding functions yourself.
+
+## Automatic encoding
+
+Every method that sends a string — `client.message`, `client.serverIdentification`, `client.configureSpawn`, and others — encodes the string to CP437 internally before writing to the socket. You can pass ordinary JavaScript strings and the library takes care of the rest.
+
+Characters not present in the CP437 mapping are replaced with `?`.
+
+## `CodePage437.to` and `CodePage437.from`
+
+If you need to encode or decode strings manually, the `CodePage437` class exposes two static methods.
+
+**`CodePage437.to(str)`** converts a JavaScript string to a `Buffer` of CP437 bytes:
+
+```js
+import { CodePage437 } from "classicborne-server-protocol"
+
+const buf = CodePage437.to("Hello ☺")
+// Returns a Buffer of CP437-encoded bytes
+```
+
+**`CodePage437.from(buffer)`** converts a `Buffer` of CP437 bytes back to a JavaScript string:
+
+```js
+const str = CodePage437.from(buf)
+// Returns the decoded string
+```
+
+## `CodePage437.mapping`
+
+`CodePage437.mapping` is a 256-element array where each index corresponds to a byte value and the element at that index is the Unicode character it maps to. Index `0x00` and `0xFF` are both mapped to a space character.
+
+You can use this array to inspect which characters are available or to build your own encoding logic, but you do not need to interact with it directly for normal server usage.
+
+## `DataTypes.padString`
+
+The Minecraft Classic protocol uses fixed-length 64-byte strings for all string fields in packets. `DataTypes.padString` encodes a string to CP437 and pads it to exactly 64 bytes using space characters (`0x20`).
+
+```js
+import { DataTypes } from "classicborne-server-protocol"
+
+const padded = DataTypes.padString("My Server")
+// Returns a 64-byte Buffer, CP437-encoded, padded with spaces
+```
+
+<Note>
+If the input string encodes to more than 64 bytes, `padString` truncates it to 64 bytes. For user-facing chat messages that may be long, use `client.message`, which splits the text across multiple packets automatically.
+</Note>
+
+## `FullCodePage437` CPE extension
+
+By default, Minecraft Classic clients treat byte values `0x01`–`0x1F` and `0xFF` as control characters and may not display them correctly. The `FullCodePage437` Classic Protocol Extension (CPE) enables clients to render the full CP437 range, including those control-character byte values.
+
+When a client negotiates the `FullCodePage437` extension, you can safely send strings containing the complete 256-character CP437 set, including symbols like `☺`, `♥`, `♠`, and the block-drawing characters at the low and high ends of the table.
+
+See the [Extensions overview](/extensions/overview) for how to enable CPE extensions on your server.

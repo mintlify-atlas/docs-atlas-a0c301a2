@@ -1,0 +1,321 @@
+---
+title: "Client — classicborne-server-protocol API"
+description: "Full API reference for the Client class: properties, close and extensions events, all packet-sending methods, and deprecated extension methods."
+---
+
+A `Client` instance represents a single connected socket — TCP or WebSocket — that has either just connected or has fully authenticated. `Server` creates `Client` instances automatically on every incoming connection; you never instantiate `Client` directly. Your code receives the instance through the `clientConnected` event.
+
+```javascript
+import { Client } from "classicborne-server-protocol"
+// Client is created by Server — do not instantiate it yourself
+```
+
+## Constructor
+
+```javascript
+new Client(socket, server)
+```
+
+Called internally by `Server`. The `socket` argument is either a Node.js `net.Socket` for TCP connections or a `SocketImpostor` that wraps a WebSocket. The `server` argument is the owning `Server` instance.
+
+<Note>
+  Do not create `Client` instances yourself. Use the instance provided by the `clientConnected` event.
+</Note>
+
+## Properties
+
+<ParamField path="client.socket" type="Socket | SocketImpostor">
+  The underlying network socket. For TCP connections this is a Node.js `net.Socket`; for WebSocket connections it is a `SocketImpostor` that wraps the WebSocket and exposes the same write interface.
+</ParamField>
+
+<ParamField path="client.server" type="Server">
+  The [`Server`](/api/server) instance that owns this client.
+</ParamField>
+
+<ParamField path="client.authed" type="boolean">
+  Whether the client has completed the authentication handshake. `false` when the socket first connects; `true` when `clientConnected` fires.
+</ParamField>
+
+<ParamField path="client.usingWebSocket" type="boolean">
+  Whether the connection was upgraded from TCP to WebSocket. Starts as `false` and becomes `true` after a successful WebSocket upgrade.
+</ParamField>
+
+<ParamField path="client.address" type="string">
+  The remote IP address of the client. For direct TCP connections this is the socket's `remoteAddress`. For WebSocket connections through a trusted proxy, it is resolved from the `x-forwarded-for` header. Use this property rather than reading `socket.remoteAddress` directly.
+</ParamField>
+
+<ParamField path="client.extensions" type="ExtensionManager">
+  An [`ExtensionManager`](/api/extension-manager) instance containing the CPE extension objects negotiated for this client. Accessing an extension that was not negotiated throws an error.
+</ParamField>
+
+<ParamField path="client.packetHandlers" type="Map<number, BasePacketHandler>">
+  A map from packet type byte to the handler object responsible for parsing that packet type. Vanilla packet handlers are registered automatically in the constructor. You can add custom handlers here to process non-standard packets.
+</ParamField>
+
+## Events
+
+**`close`** — fires when the socket is closed, whether cleanly or due to an error.
+
+```javascript
+client.on("close", () => {
+  console.log("Player disconnected")
+})
+```
+
+**`extensions`** — fires when CPE extension negotiation is complete. The callback receives the array of extensions the client agreed to support.
+
+```javascript
+client.on("extensions", (extensions) => {
+  console.log("Client supports:", extensions.map(e => e.name))
+})
+```
+
+<Note>
+  By the time `clientConnected` fires, extension negotiation is already complete. You only need the `extensions` event if you need low-level control before `clientConnected`.
+</Note>
+
+## Packet-sending methods
+
+These methods write packets to the client's socket. Call them after `clientConnected` fires.
+
+### `serverIdentification`
+
+```javascript
+client.serverIdentification(serverName, motd, userType)
+```
+
+Sends the server identification packet. This is typically the first packet you send to a newly authenticated client.
+
+<ParamField path="serverName" type="string" required>
+  The server's display name, up to 64 characters. Encoded as CP437.
+</ParamField>
+
+<ParamField path="motd" type="string" required>
+  The message of the day shown on the client's connection screen. Encoded as CP437.
+</ParamField>
+
+<ParamField path="userType" type="number" required>
+  `0x00` for a normal user, `0x64` for operator. Operator status unlocks additional blocks in the client UI.
+</ParamField>
+
+### `loadLevel`
+
+```javascript
+await client.loadLevel(data, x, y, z, processed?, callback?, preFinalize?)
+```
+
+Streams a level to the client. Sends a level initialise packet, then the compressed data in 1024-byte chunks, then the level finalise packet.
+
+<ParamField path="data" type="Buffer" required>
+  The level data buffer. If `processed` is `false`, this must be the raw block array; the method compresses it automatically.
+</ParamField>
+
+<ParamField path="x" type="number" required>
+  Width of the level in blocks.
+</ParamField>
+
+<ParamField path="y" type="number" required>
+  Height of the level in blocks.
+</ParamField>
+
+<ParamField path="z" type="number" required>
+  Depth of the level in blocks.
+</ParamField>
+
+<ParamField path="processed" type="boolean" default="false">
+  Set to `true` if `data` has already been run through `server.utils.processLevel`. When `false`, `loadLevel` processes the buffer itself.
+</ParamField>
+
+<ParamField path="callback" type="function">
+  Optional function called after the finalise packet is sent.
+</ParamField>
+
+<ParamField path="preFinalize" type="function">
+  Optional function called just before the finalise packet is sent.
+</ParamField>
+
+```javascript
+server.on("clientConnected", async (client, authInfo) => {
+  client.serverIdentification("My Server", "Welcome!", 0x00)
+  await client.loadLevel(levelBuffer, 256, 64, 256, true)
+  client.configureSpawn(0, authInfo.username, 128, 32, 128, 0, 0)
+})
+```
+
+### `configureSpawn`
+
+```javascript
+client.configureSpawn(id, username, x, y, z, yaw, pitch)
+```
+
+Sends the spawn player packet, placing a player entity in the world. Use `id` `0` and `authInfo.username` to spawn the local player. Coordinates are in fixed-point units (1 block = 32 units).
+
+<ParamField path="id" type="number" required>
+  Entity ID. Use `-1` or `0` for the local player.
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  The player's display name. Encoded as CP437.
+</ParamField>
+
+<ParamField path="x" type="number" required>
+  X coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="y" type="number" required>
+  Y coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="z" type="number" required>
+  Z coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="yaw" type="number" required>
+  Yaw angle as a byte (0–255).
+</ParamField>
+
+<ParamField path="pitch" type="number" required>
+  Pitch angle as a byte (0–255).
+</ParamField>
+
+### `message`
+
+```javascript
+client.message(message, messageType?, continueAdornment?)
+```
+
+Sends a chat message. Long messages are split automatically across multiple packets, with the continuation prefix prepended to each subsequent packet.
+
+<ParamField path="message" type="string" required>
+  The message text. Encoded as CP437 automatically.
+</ParamField>
+
+<ParamField path="messageType" type="number" default="-1">
+  The message type byte. `-1` is normal chat.
+</ParamField>
+
+<ParamField path="continueAdornment" type="string" default='">"'>
+  The prefix prepended when a message wraps to a new packet. Must not exceed 63 characters.
+</ParamField>
+
+### `setBlock`
+
+```javascript
+client.setBlock(type, x, y, z)
+```
+
+Tells the client to update a block at the given coordinates. Use this to sync world block changes to a specific player.
+
+<ParamField path="type" type="number" required>
+  The block type ID.
+</ParamField>
+
+<ParamField path="x" type="number" required>
+  X coordinate in block units.
+</ParamField>
+
+<ParamField path="y" type="number" required>
+  Y coordinate in block units.
+</ParamField>
+
+<ParamField path="z" type="number" required>
+  Z coordinate in block units.
+</ParamField>
+
+### `absolutePositionUpdate`
+
+```javascript
+client.absolutePositionUpdate(id, x, y, z, yaw, pitch)
+```
+
+Sends an absolute position and orientation update for an entity. Use this to teleport players or update another player's visible position.
+
+<ParamField path="id" type="number" required>
+  The entity ID to update.
+</ParamField>
+
+<ParamField path="x" type="number" required>
+  X coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="y" type="number" required>
+  Y coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="z" type="number" required>
+  Z coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="yaw" type="number" required>
+  Yaw angle as a byte (0–255).
+</ParamField>
+
+<ParamField path="pitch" type="number" required>
+  Pitch angle as a byte (0–255).
+</ParamField>
+
+### `despawnPlayer`
+
+```javascript
+client.despawnPlayer(id)
+```
+
+Removes the player entity with the given `id` from the client's view. Call this when a player leaves or moves out of range.
+
+<ParamField path="id" type="number" required>
+  The entity ID to despawn.
+</ParamField>
+
+### `updateUserType`
+
+```javascript
+client.updateUserType(userType)
+```
+
+Updates the client's user type without re-sending the full server identification packet.
+
+<ParamField path="userType" type="number" required>
+  `0x00` for normal, `0x64` for operator.
+</ParamField>
+
+### `disconnect`
+
+```javascript
+client.disconnect(message)
+```
+
+Sends a disconnect (kick) packet with the given message. The message is displayed to the player in the client UI. The socket should be closed after sending.
+
+<ParamField path="message" type="string" required>
+  The reason shown to the player. Encoded as CP437.
+</ParamField>
+
+```javascript
+client.disconnect("You have been kicked.")
+```
+
+## Deprecated methods
+
+Several methods on `Client` are deprecated in favour of the CPE extension system. You may encounter them in older code.
+
+<Warning>
+  Deprecated methods emit a runtime warning the first time they are called. Migrate to the extension API via `client.extensions` to remove the warnings and gain access to extension negotiation checks.
+</Warning>
+
+| Deprecated method | Replacement |
+|---|---|
+| `setClickDistance(distance)` | `ClickDistance` extension |
+| `defineBlock(block)` | `BlockDefinitions` extension |
+| `defineBlockExt(block)` | `BlockDefinitionsExt` extension |
+| `removeBlockDefinition(blockId)` | `BlockDefinitions` extension |
+| `setInventoryOrder(id, order)` | `InventoryOrder` extension |
+| `customBlockSupport(level)` | `CustomBlocks` extension |
+| `texturePackUrl(url)` | `EnvMapAspect` extension |
+| `setEnvironmentProperties(env)` | `EnvMapAspect` extension |
+| `setBlockPermission(id, allow, del)` | `BlockPermissions` extension |
+| `configureSpawnExt(...)` | `ExtPlayerList` extension |
+| `addPlayerName(...)` | `ExtPlayerList` extension |
+| `removePlayerName(id)` | `ExtPlayerList` extension |
+| `setEntityProperty(id, type, val)` | `EntityProperty` extension |
+| `setHotbar(blockId, index)` | `SetHotbar` extension |
+| `extendedPositionUpdate(...)` | `ExtEntityTeleport` extension |

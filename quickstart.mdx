@@ -1,81 +1,131 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
-icon: 'rocket'
+title: "Get started with classicborne-server-protocol"
+description: "A step-by-step walkthrough to install the library and get a minimal Minecraft Classic server accepting connections and loading a level."
 ---
 
-## Get started in three steps
+This guide walks you through creating a working Minecraft Classic server using `classicborne-server-protocol`. By the end, you will have a server that accepts client connections, sends server identification, loads an empty level, and places the player at the spawn point.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Install the package">
+    Install `classicborne-server-protocol` from npm. The library has no required peer dependencies beyond Node.js.
 
-### Step 1: Set up your local environment
+    <CodeGroup>
+    ```bash npm
+    npm install classicborne-server-protocol
+    ```
+    ```bash yarn
+    yarn add classicborne-server-protocol
+    ```
+    ```bash pnpm
+    pnpm add classicborne-server-protocol
+    ```
+    </CodeGroup>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    Make sure your `package.json` includes `"type": "module"` since the library is ESM-only.
+  </Step>
 
-### Step 2: Deploy your changes
+  <Step title="Create a server file">
+    Create a file called `server.mjs` (or any `.mjs` file) and import `Server`:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```js server.mjs
+    import { Server } from "classicborne-server-protocol"
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    const server = new Server(25565)
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    The `Server` constructor takes a port number (default `25565`) and an optional host string. It immediately starts listening for TCP connections.
+  </Step>
 
-### Step 3: Go live
+  <Step title="Process a level buffer">
+    Before any client connects, prepare your level data. `server.utils.processLevel` takes a raw block buffer and dimensions, prepends the block count as a 32-bit big-endian integer, then gzip-compresses the result. It returns a `Promise<Buffer>`.
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```js server.mjs
+    const bounds = { x: 512, y: 512, z: 512 }
+
+    // Allocate an empty flat world (all air)
+    const emptyLevelBuffer = server.utils.processLevel(
+      Buffer.alloc(bounds.x * bounds.y * bounds.z),
+      bounds.x,
+      bounds.y,
+      bounds.z
+    )
+    ```
+
+    Processing the level once outside the connection handler means you only pay the compression cost a single time, no matter how many clients connect.
+  </Step>
+
+  <Step title="Handle the clientConnected event">
+    Listen for `clientConnected` to respond when a client finishes authenticating. The event provides a `Client` instance and an `authInfo` object.
+
+    ```js server.mjs
+    server.on("clientConnected", async (client, authInfo) => {
+      // Send server name, MOTD, and user type (0x00 = normal, 0x64 = operator)
+      client.serverIdentification("Empty", "So cool!", 0x00)
+
+      // Send the level; pass true as the fifth argument because the buffer is already processed
+      client.loadLevel(await emptyLevelBuffer, bounds.x, bounds.y, bounds.z, true)
+
+      // Spawn the player at position (0, 0, 0) with zero yaw and pitch
+      client.configureSpawn(0, authInfo.username, 0, 0, 0, 0, 0)
+    })
+    ```
+
+    The `authInfo` object contains:
+    - `authInfo.username` — the player's username as reported by the client
+    - `authInfo.key` — the session key used for authentication (compare against the Minecraft heartbeat API if you want to verify identity)
+    - `authInfo.extensions` — the list of CPE extensions the client negotiated, if any
+
+    `client.serverIdentification(serverName, motd, userType)` sends the server identification packet. `userType` `0x00` is a normal user; `0x64` grants operator status in the client UI.
+
+    `client.loadLevel(data, x, y, z, processed, callback)` streams the level to the client in 1024-byte chunks. Pass `true` for `processed` when the buffer has already been run through `processLevel`.
+
+    `client.configureSpawn(id, username, x, y, z, yaw, pitch)` sends the spawn player packet. Use `id` `0` and `authInfo.username` for the local player.
+  </Step>
+
+  <Step title="Run the server">
+    Run your file with Node.js:
+
+    ```bash
+    node server.mjs
+    ```
+
+    Connect with a Minecraft Classic client (such as ClassiCube) pointing at `localhost:25565`. You should see an empty world and be placed at the origin.
+  </Step>
+</Steps>
+
+## Complete minimal server
+
+Here is the full working example combining all the steps above, taken directly from `examples/minimum.mjs`:
+
+```js server.mjs
+// Bare minimum server operation
+import { Server } from "classicborne-server-protocol"
+const server = new Server(25565)
+
+const bounds = { x: 512, y: 512, z: 512 }
+const emptyLevelBuffer = server.utils.processLevel(
+  Buffer.alloc(bounds.x * bounds.y * bounds.z),
+  bounds.x,
+  bounds.y,
+  bounds.z
+)
+
+server.on("clientConnected", async (client, authInfo) => {
+  client.serverIdentification("Empty", "So cool!", 0x00)
+  client.loadLevel(await emptyLevelBuffer, bounds.x, bounds.y, bounds.z, true)
+  client.configureSpawn(0, authInfo.username, 0, 0, 0, 0, 0)
+})
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+From here you can explore the core concepts to understand how the `Server` and `Client` classes work in more depth, or jump into the CPE extensions to start using features like custom blocks and environment settings.
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Server concepts" icon="server" href="/concepts/server">
+    Learn how the server manages connections, CPE negotiation, and WebSocket support.
+  </Card>
+  <Card title="CPE extensions" icon="puzzle-piece" href="/extensions/overview">
+    Add custom blocks, environment settings, and extended player lists to your server.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

@@ -1,0 +1,141 @@
+---
+title: "Server — classicborne-server-protocol API"
+description: "Full API reference for the Server class: constructor, instance properties, the clientConnected event, static members, and WebSocket setup."
+---
+
+The `Server` class is the entry point for every `classicborne-server-protocol` application. It opens a TCP socket, handles incoming connections, drives the authentication and CPE extension handshake, and emits a `clientConnected` event with a ready-to-use `Client` once a player authenticates.
+
+```javascript
+import { Server } from "classicborne-server-protocol"
+```
+
+## Constructor
+
+```javascript
+new Server(port?, host?)
+```
+
+The constructor is synchronous and begins listening immediately.
+
+<ParamField path="port" type="number" default="25565">
+  The TCP port to listen on. Defaults to `25565`, the standard Minecraft Classic port.
+</ParamField>
+
+<ParamField path="host" type="string">
+  The network interface to bind to. When omitted, the server listens on all interfaces.
+</ParamField>
+
+```javascript
+const server = new Server(25565)
+```
+
+## Instance properties
+
+<ParamField path="server.cpeEnabled" type="boolean" default="true">
+  Whether to attempt Classic Protocol Extension (CPE) negotiation with connecting clients. Set to `false` to support only vanilla Classic clients with no CPE support.
+</ParamField>
+
+<ParamField path="server.appName" type="string" default='"Classicborne Protocol"'>
+  The application name sent to clients during CPE negotiation. Change this to identify your server implementation.
+</ParamField>
+
+<ParamField path="server.extensions" type="extension[]">
+  The list of CPE extensions the server advertises to clients. The default list includes 13 extensions: `ClickDistance`, `BlockDefinitions`, `BlockDefinitionsExt`, `InventoryOrder`, `CustomBlocks`, `EnvMapAspect`, `BlockPermissions`, `HeldBlock`, `ExtPlayerList`, `EntityProperty`, `SetHotbar`, `FullCP437`, and `ExtEntityTeleport`. Replace or modify this array to advertise a different set.
+</ParamField>
+
+<ParamField path="server.connectionTimeout" type="number" default="30000">
+  How long in milliseconds to wait for a client to complete authentication before dropping the connection. Any socket that does not authenticate within this window is destroyed automatically.
+</ParamField>
+
+<ParamField path="server.utils" type="object">
+  A reference to the internal `utils` module. Includes the `processLevel` helper for compressing and framing level buffers before sending them to clients.
+</ParamField>
+
+<ParamField path="server.isTrustedWebSocketProxy" type="function">
+  A function `(remoteAddress: string) => boolean` that determines whether an IP address is a trusted WebSocket proxy. Trusted proxies cause the library to resolve the client's real address from the `x-forwarded-for` header instead of the socket's address. The default implementation trusts only ClassiCube's proxy at `::ffff:34.223.5.250`.
+</ParamField>
+
+```javascript
+const server = new Server(25565)
+
+server.appName = "My Classic Server"
+server.connectionTimeout = 15000
+
+server.isTrustedWebSocketProxy = (remoteAddress) => {
+  return ["::ffff:34.223.5.250", "::ffff:10.0.0.1"].includes(remoteAddress)
+}
+```
+
+## `clientConnected` event
+
+Emitted when a client successfully completes the authentication handshake. If CPE is enabled and the client supports it, extension negotiation completes before this event fires.
+
+```javascript
+server.on("clientConnected", (client, authInfo) => {
+  console.log(`${authInfo.username} connected`)
+})
+```
+
+<ParamField path="client" type="Client">
+  A fully authenticated [`Client`](/api/client) instance ready to receive packets.
+</ParamField>
+
+<ParamField path="authInfo" type="object">
+  Information from the authentication handshake.
+
+  - `authInfo.username` — the player's username as reported by the client
+  - `authInfo.key` — the session key for verifying identity against the heartbeat API
+  - `authInfo.extensions` — the CPE extensions the client negotiated, or `undefined` if CPE was not used
+</ParamField>
+
+<Note>
+  The library does not verify the session key against an external service. If you want to authenticate players, compare `authInfo.key` against the ClassiCube or Minecraft heartbeat API yourself.
+</Note>
+
+## Instance methods
+
+### `setupWebSocketServer`
+
+```javascript
+await server.setupWebSocketServer()
+```
+
+Sets up a WebSocket server so that WebSocket connections are accepted on the same port as TCP. Returns a `Promise<UpgradingHttpServer>`.
+
+<ResponseField name="returns" type="Promise<UpgradingHttpServer>">
+  Resolves to an [`UpgradingHttpServer`](/api/upgrading-http-server) instance once the HTTP and WebSocket servers are ready.
+</ResponseField>
+
+```javascript
+const server = new Server(25565)
+await server.setupWebSocketServer()
+// Now accepts both TCP and WebSocket connections on port 25565
+```
+
+## Static properties
+
+<ParamField path="Server.maximumBufferSize" type="number" default="5000">
+  The maximum number of bytes the library will buffer from a single client before destroying the connection. Not intended to be changed at runtime.
+</ParamField>
+
+<ParamField path="Server.websocketUpgradeFlag" type="string" default='"upgrade"'>
+  The sentinel string returned by a packet handler to signal that the connection is being upgraded to WebSocket. Used internally by the packet processing loop.
+</ParamField>
+
+## Static methods
+
+### `Server.tcpPacketHandler`
+
+```javascript
+Server.tcpPacketHandler(client, data?)
+```
+
+Parses incoming binary data and dispatches it to the correct packet handler registered on the client. Called automatically by the server on every `data` event — you do not need to call it yourself. It is public for testing or custom transport layers.
+
+<ParamField path="client" type="Client">
+  The client whose buffer should be processed.
+</ParamField>
+
+<ParamField path="data" type="Buffer">
+  Optional new data to append to the client's buffer before processing. When called recursively for remaining bytes, `data` is omitted.
+</ParamField>

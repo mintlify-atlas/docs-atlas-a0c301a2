@@ -1,0 +1,60 @@
+---
+title: "UpgradingHttpServer — classicborne-server-protocol API"
+description: "API reference for the UpgradingHttpServer class: properties and the upgradeSocketToHttp method for accepting ClassiCube WebSocket browser clients."
+---
+
+`UpgradingHttpServer` bridges the TCP server and the WebSocket server so that ClassiCube browser clients can connect over WebSocket on the same port as regular TCP clients. When a TCP socket sends an HTTP upgrade request, the server recognises it and hands it off to the underlying `ws` WebSocket server. The resulting WebSocket is then wrapped in a `SocketImpostor` so it looks like a plain socket to the rest of the library.
+
+You do not construct `UpgradingHttpServer` directly. Create one by calling `server.setupWebSocketServer()`.
+
+```javascript
+const server = new Server(25565)
+const httpServer = await server.setupWebSocketServer()
+```
+
+## Properties
+
+<ParamField path="httpServer.webSocketServer" type="WebSocketServer">
+  The underlying `ws` `WebSocketServer` instance, configured in `noServer` mode. The HTTP server handles the upgrade handshake and passes the socket to this object.
+</ParamField>
+
+<ParamField path="httpServer.httpServer" type="http.Server">
+  The Node.js `http.Server` that listens for HTTP upgrade requests from WebSocket clients. It responds with `200 OK` and a `Hello World!` JSON body to plain HTTP requests, and handles the upgrade event for WebSocket connections.
+</ParamField>
+
+## Methods
+
+### `upgradeSocketToHttp`
+
+```javascript
+httpServer.upgradeSocketToHttp(socket, head)
+```
+
+Temporarily transforms a raw TCP socket so the HTTP server can read the upgrade request from it, then restores the socket's original stream methods once the first data event fires. Called by the `Server` internals when a TCP connection sends what appears to be an HTTP upgrade request.
+
+<ParamField path="socket" type="net.Socket">
+  The raw TCP socket that initiated the HTTP upgrade.
+</ParamField>
+
+<ParamField path="head" type="Buffer">
+  The initial bytes already read from the socket. These are replayed into the socket after the HTTP server takes ownership.
+</ParamField>
+
+<Note>
+  You do not need to call `upgradeSocketToHttp` yourself. The `Server` and `UpgradingHttpServer` coordinate the upgrade automatically.
+</Note>
+
+## How WebSocket connections work
+
+When `setupWebSocketServer()` is called, the `UpgradingHttpServer` starts an HTTP server. When a TCP client sends an HTTP `Upgrade` request, the TCP `Server` detects this via the `websocketUpgradeFlag` sentinel and calls `upgradeSocketToHttp` to route the socket through the HTTP server. The `ws` library then completes the WebSocket handshake.
+
+After the handshake, if the connecting IP is a trusted WebSocket proxy (see `server.isTrustedWebSocketProxy`), the client's address is resolved from the `x-forwarded-for` header. The WebSocket is then wrapped in a `SocketImpostor` and the connection continues exactly like a TCP connection.
+
+```javascript
+const server = new Server(25565)
+await server.setupWebSocketServer()
+
+server.on("clientConnected", (client, authInfo) => {
+  console.log(`${authInfo.username} connected via ${client.usingWebSocket ? "WebSocket" : "TCP"}`)
+})
+```

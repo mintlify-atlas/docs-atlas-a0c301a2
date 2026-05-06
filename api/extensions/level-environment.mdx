@@ -1,0 +1,104 @@
+---
+title: "LevelEnvironment — CPE extension API"
+description: "API reference for LevelEnvironment: send a texture pack URL and configure sky, fog, clouds, weather, and edge appearance for a client's current level."
+---
+
+`LevelEnvironment` maps to the `EnvMapAspect` CPE in the Classic Protocol Extension specification. It lets you override visual environment settings for the level currently loaded on a client — including the texture pack URL, sky and edge block IDs, cloud height, fog distance, cloud speed, and more. Each call to `setEnvironmentProperties` sends one packet per recognised key in the object you pass.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `LevelEnvironment` (maps to the `EnvMapAspect` CPE)
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("LevelEnvironment")
+```
+
+## Static properties
+
+**`LevelEnvironment.texturePackUrlPacketIdentifier`** — `0x28`.
+
+**`LevelEnvironment.environmentPropertiesPacketIdentifier`** — `0x29`.
+
+**`LevelEnvironment.environmentProperties`** — ordered array of recognised property key names:
+
+```javascript
+["sidesId", "edgeId", "edgeHeight", "cloudsHeight", "maxFog",
+ "cloudsSpeed", "weatherFade", "useExponentialFog", "sidesOffset"]
+```
+
+The index of a key in this array is the property type byte sent in each packet.
+
+## Methods
+
+### `texturePackUrl`
+
+```javascript
+ext.texturePackUrl(url)
+```
+
+Sends a texture pack URL packet (packet ID `0x28`). The client downloads the texture pack from `url` and applies it to the current level.
+
+<ParamField path="url" type="string" required>
+  The URL of the texture pack. The string is padded to 64 bytes using CP437 encoding. Pass an empty string to reset to the default texture.
+</ParamField>
+
+### `setEnvironmentProperties`
+
+```javascript
+ext.setEnvironmentProperties(environment)
+```
+
+Iterates over the key/value pairs of `environment` and sends one packet (packet ID `0x29`) for each key that appears in `LevelEnvironment.environmentProperties`. Unrecognised keys are silently ignored.
+
+<ParamField path="environment" type="object" required>
+  An object containing one or more of the following keys:
+
+  <Expandable title="property keys">
+    <ResponseField name="sidesId" type="number">
+      Block ID used for the sides of the map boundary.
+    </ResponseField>
+    <ResponseField name="edgeId" type="number">
+      Block ID used for the bottom edge of the map.
+    </ResponseField>
+    <ResponseField name="edgeHeight" type="number">
+      Y height of the water/edge surface.
+    </ResponseField>
+    <ResponseField name="cloudsHeight" type="number">
+      Y height at which clouds are rendered.
+    </ResponseField>
+    <ResponseField name="maxFog" type="number">
+      Maximum fog distance in blocks. `0` uses the client's default.
+    </ResponseField>
+    <ResponseField name="cloudsSpeed" type="number">
+      Cloud movement speed. `256` is normal speed.
+    </ResponseField>
+    <ResponseField name="weatherFade" type="number">
+      Weather effect intensity (0–255).
+    </ResponseField>
+    <ResponseField name="useExponentialFog" type="number">
+      `1` to use exponential fog, `0` for linear fog.
+    </ResponseField>
+    <ResponseField name="sidesOffset" type="number">
+      Vertical offset applied to the sides block, in blocks.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("LevelEnvironment")) {
+    const ext = client.extensions.get("LevelEnvironment")
+    ext.texturePackUrl("https://example.com/textures/terrain.zip")
+    ext.setEnvironmentProperties({
+      edgeHeight: 32,
+      cloudsHeight: 128,
+      maxFog: 0,
+      cloudsSpeed: 512,
+    })
+  }
+})
+```

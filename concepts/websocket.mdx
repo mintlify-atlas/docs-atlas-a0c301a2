@@ -1,0 +1,95 @@
+---
+title: "WebSocket support for ClassiCube browser clients"
+description: "How to enable WebSocket connections alongside TCP so browser-based ClassiCube clients can connect to your server on the same port."
+---
+
+ClassiCube supports playing Minecraft Classic in a web browser. Browser tabs cannot open raw TCP sockets, so ClassiCube routes browser connections through a WebSocket proxy. The `classicborne-server-protocol` library can accept both TCP and WebSocket connections on the same port, so you do not need to run a separate server for browser players.
+
+## How it works
+
+When you call `server.setupWebSocketServer()`, the library creates an `UpgradingHttpServer` that sits alongside the TCP server. When a TCP connection arrives with an HTTP upgrade request, the server transparently upgrades the socket to a WebSocket connection. A `SocketImpostor` then wraps the WebSocket to make it API-compatible with a standard `net.Socket`.
+
+From the perspective of your application code, there is no difference between a TCP client and a WebSocket client. The same `clientConnected` event fires, the same `Client` methods work, and `client.address` always returns the player's real IP regardless of transport.
+
+## Enabling WebSocket support
+
+Call `setupWebSocketServer()` after creating the server. The method is async and returns a `Promise<UpgradingHttpServer>`.
+
+```js
+import { Server } from "classicborne-server-protocol"
+
+const server = new Server(25565)
+await server.setupWebSocketServer()
+
+// Now accepts both TCP and WebSocket connections on port 25565
+server.on("clientConnected", (client, authInfo) => {
+  console.log(`${authInfo.username} connected via ${client.usingWebSocket ? "WebSocket" : "TCP"}`)
+})
+```
+
+<Note>
+  You must `await` (or otherwise handle the `Promise`) before your server starts accepting WebSocket clients. The TCP server is already listening before you call `setupWebSocketServer`.
+</Note>
+
+## The `SocketImpostor` class
+
+`SocketImpostor` is an internal wrapper that makes a WebSocket behave like a TCP socket. It is created automatically when a connection is upgraded. You do not instantiate it yourself, but it is exported from the package if you need it for custom transport implementations.
+
+The impostor forwards `data` events (from WebSocket `message` events), exposes a `write(buffer)` method that calls `websocket.send(buffer)`, and exposes a `destroy()` method that closes the WebSocket. This means `Server.tcpPacketHandler` and all `Client` packet methods work identically whether the underlying transport is TCP or WebSocket.
+
+## Trusted proxy detection
+
+ClassiCube does not proxy TCP connections directly — it routes browser clients through its own WebSocket proxy server at `::ffff:34.223.5.250`. This means `socket.remoteAddress` on a browser connection reports the proxy's IP, not the player's IP.
+
+The library handles this automatically. When a WebSocket connection comes in from a trusted proxy, the library reads the `x-forwarded-for` request header and sets `client.address` to that value instead of the proxy's address.
+
+The default trusted proxy check looks like this (from `Server.mjs`):
+
+```js
+function isTrustedWebSocketProxy(remoteAddress) {
+  if (remoteAddress == "::ffff:34.223.5.250") return true // ClassiCube's WebSocket proxy
+  return false
+}
+```
+
+## Overriding the trusted proxy
+
+The `server.isTrustedWebSocketProxy` property holds the proxy check function. Replace it to trust additional proxies or change the trust logic.
+
+```js
+server.isTrustedWebSocketProxy = (remoteAddress) => {
+  const trusted = [
+    "::ffff:34.223.5.250", // ClassiCube's WebSocket proxy
+    "::ffff:10.0.0.1",     // Your own proxy
+  ]
+  return trusted.includes(remoteAddress)
+}
+```
+
+To disable proxy trust entirely and always use the raw socket address:
+
+```js
+server.isTrustedWebSocketProxy = () => false
+```
+
+<Warning>
+  Trusting an address you do not control allows that proxy to forge the `client.address` value your application sees. Only trust proxies you operate or that you have verified are safe, such as ClassiCube's documented proxy.
+</Warning>
+
+## Checking the transport type
+
+If you need to distinguish between TCP and WebSocket clients in your own logic, check `client.usingWebSocket`:
+
+```js
+server.on("clientConnected", (client, authInfo) => {
+  if (client.usingWebSocket) {
+    // Browser client via ClassiCube WebSocket proxy
+  } else {
+    // Native TCP client
+  }
+})
+```
+
+<Tip>
+  In most cases you do not need to branch on `client.usingWebSocket`. All `Client` packet methods work the same way regardless of transport.
+</Tip>

@@ -1,0 +1,56 @@
+---
+title: "BlockPermissions — CPE extension API"
+description: "API reference for the BlockPermissions extension: control which block IDs a client is allowed to place or delete on a per-block basis."
+---
+
+`BlockPermissions` lets you restrict or restore a client's ability to place or delete individual block IDs. You can use it to enforce gameplay rules — for example, preventing players from placing or breaking certain blocks — without relying solely on server-side block-change validation.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `BlockPermissions`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("BlockPermissions")
+```
+
+## Static properties
+
+**`BlockPermissions.setBlockPermissionPacketIdentifier`** — `0x1c`. The packet type byte written at the start of every `setBlockPermission` packet.
+
+## Methods
+
+### `setBlockPermission`
+
+```javascript
+ext.setBlockPermission(id, allowPlacement, allowDeletion)
+```
+
+Sends a block permission packet that controls whether the client may place or delete the specified block ID.
+
+<ParamField path="id" type="number" required>
+  The block ID whose permissions are being set (0–255).
+</ParamField>
+
+<ParamField path="allowPlacement" type="number" required>
+  `1` to allow the client to place this block, `0` to forbid it.
+</ParamField>
+
+<ParamField path="allowDeletion" type="number" required>
+  `1` to allow the client to delete this block, `0` to forbid it.
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("BlockPermissions")) {
+    const ext = client.extensions.get("BlockPermissions")
+    // Prevent players from placing or deleting bedrock (ID 7)
+    ext.setBlockPermission(7, 0, 0)
+    // Allow placing water (ID 8) but not deleting it
+    ext.setBlockPermission(8, 1, 0)
+  }
+})
+```

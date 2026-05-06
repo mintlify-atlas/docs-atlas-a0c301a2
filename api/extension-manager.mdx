@@ -1,0 +1,86 @@
+---
+title: "ExtensionManager — classicborne-server-protocol API"
+description: "API reference for the ExtensionManager class: a type-safe Map subclass that holds a client's negotiated CPE extensions and throws on missing keys."
+---
+
+`ExtensionManager` is a `Map` subclass attached to every `Client` as `client.extensions`. It stores the CPE extension objects that were negotiated between the server and the client during the connection handshake. Its overridden `get` method throws an error if you request an extension that was not negotiated, which turns a missing extension into an explicit failure rather than a silent `undefined`.
+
+## Constructor
+
+```javascript
+new ExtensionManager(client)
+```
+
+`ExtensionManager` is created automatically by `Client`. You do not instantiate it directly.
+
+<ParamField path="client" type="Client | null">
+  The client this manager belongs to. Accessible as `manager.client`.
+</ParamField>
+
+## Properties
+
+<ParamField path="manager.client" type="Client | null">
+  A reference back to the `Client` instance that owns this manager. Set during construction.
+</ParamField>
+
+## Methods
+
+`ExtensionManager` inherits all standard `Map` methods. The only override is `get`.
+
+### `get`
+
+```javascript
+manager.get(key)
+```
+
+Returns the extension instance registered under `key`. Throws an `Error` if the extension is not loaded.
+
+<ParamField path="key" type="string" required>
+  The name of the extension as used in the *classicborne* ecosystem. See the `extensions` namespace for canonical names.
+</ParamField>
+
+<ResponseField name="returns" type="BaseExtension">
+  The extension instance. The return type is narrowed to the specific extension type for `key` when TypeScript can resolve it.
+</ResponseField>
+
+```javascript
+// Correct — check before accessing
+if (client.extensions.has("FullCodePage437")) {
+  const ext = client.extensions.get("FullCodePage437")
+}
+```
+
+```javascript
+// This throws if "FullCodePage437" was not negotiated
+const ext = client.extensions.get("FullCodePage437")
+// Error: Extension "FullCodePage437" is not loaded.
+```
+
+## Checking for an extension before access
+
+Because `get` throws on missing extensions, always use `has` first when the presence of an extension is not guaranteed.
+
+```javascript
+server.on("clientConnected", (client, authInfo) => {
+  if (client.extensions.has("CustomBlocks")) {
+    const customBlocks = client.extensions.get("CustomBlocks")
+    // use the extension...
+  }
+})
+```
+
+<Tip>
+  If your game logic requires a specific extension, check for it in `clientConnected` and disconnect clients that do not support it rather than handling the thrown error in normal flow.
+</Tip>
+
+## Inheriting from Map
+
+Because `ExtensionManager` extends `Map`, you can use all standard `Map` iteration methods on it:
+
+```javascript
+for (const [name, extension] of client.extensions) {
+  console.log(name, extension)
+}
+
+console.log(client.extensions.size) // number of loaded extensions
+```

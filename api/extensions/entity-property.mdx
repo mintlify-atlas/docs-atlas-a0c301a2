@@ -1,0 +1,50 @@
+---
+title: "EntityProperty — CPE extension API"
+description: "API reference for the EntityProperty extension: set typed numeric properties on in-world entities, such as rotation speed or buoyancy, for a client."
+---
+
+`EntityProperty` lets you attach typed numeric properties to entities visible to a client. Properties are identified by a numeric type index and carry a 32-bit unsigned integer value. The CPE spec defines a set of standard property types, such as rotation speeds and buoyancy flags, that clients interpret to modify entity behaviour.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `EntityProperty`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("EntityProperty")
+```
+
+## Methods
+
+### `setEntityProperty`
+
+```javascript
+ext.setEntityProperty(id, propertyType, value)
+```
+
+Sends an entity property packet (packet ID `0x2a`) that sets a single property on the specified entity.
+
+<ParamField path="id" type="number" required>
+  The entity ID to update. Use the same ID passed to `configureSpawn` or `ExtendedPlayerList.configureSpawn`.
+</ParamField>
+
+<ParamField path="propertyType" type="number" required>
+  The property type index. Refer to the ClassiCube CPE specification for the list of defined property types (e.g. rotation speed axes, buoyancy).
+</ParamField>
+
+<ParamField path="value" type="number" required>
+  The 32-bit unsigned integer value for the property.
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("EntityProperty")) {
+    const ext = client.extensions.get("EntityProperty")
+    // Set rotation speed around the Y axis (property type 3) for entity 1
+    ext.setEntityProperty(1, 3, 40)
+  }
+})
+```

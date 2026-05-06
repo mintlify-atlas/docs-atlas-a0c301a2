@@ -1,0 +1,154 @@
+---
+title: "BlockDefinitionsExtended — CPE extension API"
+description: "API reference for BlockDefinitionsExtended: define custom blocks with per-face textures and a custom bounding box using the BlockDefinitionsExt CPE."
+---
+
+`BlockDefinitionsExtended` builds on the base block definition packet by giving you independent texture indices for each of the six faces and full control over the block's bounding box. Use it instead of `BlockDefinitions` when you need non-cubic hitboxes or different artwork on the left, right, front, and back faces.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `BlockDefinitionsExt`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("BlockDefinitionsExtended")
+```
+
+## Static properties
+
+**`BlockDefinitionsExtended.defineBlockPacketIdentifier`** — `0x25`. The packet type byte written at the start of every `defineBlock` packet.
+
+## Methods
+
+### `defineBlock`
+
+```javascript
+ext.defineBlock(block)
+```
+
+Sends an extended block definition packet. The extended format replaces the single `sideTexture` field from `BlockDefinitions` with four directional texture fields, and adds six bounding-box fields. All fields are optional and default to sensible values.
+
+<ParamField path="block.id" type="number" required>
+  The block ID to define (0–255).
+</ParamField>
+
+<ParamField path="block.name" type="string" default='""'>
+  Display name for the block, up to 64 characters. Encoded as CP437.
+</ParamField>
+
+<ParamField path="block.collision" type="number" default="2">
+  Collision behaviour. `0` = none, `1` = solid, `2` = normal.
+</ParamField>
+
+<ParamField path="block.speed" type="number" default="128">
+  Movement speed modifier. `128` is normal speed.
+</ParamField>
+
+<ParamField path="block.topTexture" type="number" default="0">
+  Texture index for the top face.
+</ParamField>
+
+<ParamField path="block.leftTexture" type="number" default="0">
+  Texture index for the left face.
+</ParamField>
+
+<ParamField path="block.rightTexture" type="number" default="0">
+  Texture index for the right face.
+</ParamField>
+
+<ParamField path="block.frontTexture" type="number" default="0">
+  Texture index for the front face.
+</ParamField>
+
+<ParamField path="block.backTexture" type="number" default="0">
+  Texture index for the back face.
+</ParamField>
+
+<ParamField path="block.bottomTexture" type="number" default="0">
+  Texture index for the bottom face.
+</ParamField>
+
+<ParamField path="block.transmitLight" type="number" default="0">
+  `0` = opaque, `1` = transparent.
+</ParamField>
+
+<ParamField path="block.walkSound" type="number" default="0">
+  Sound ID played when walking on the block.
+</ParamField>
+
+<ParamField path="block.fullBright" type="number" default="0">
+  `1` makes the block emit maximum brightness.
+</ParamField>
+
+<ParamField path="block.minX" type="number" default="0">
+  Bounding box minimum X in units where `16` = one full block.
+</ParamField>
+
+<ParamField path="block.minY" type="number" default="0">
+  Bounding box minimum Y.
+</ParamField>
+
+<ParamField path="block.minZ" type="number" default="0">
+  Bounding box minimum Z.
+</ParamField>
+
+<ParamField path="block.maxX" type="number" default="16">
+  Bounding box maximum X.
+</ParamField>
+
+<ParamField path="block.maxY" type="number" default="16">
+  Bounding box maximum Y.
+</ParamField>
+
+<ParamField path="block.maxZ" type="number" default="16">
+  Bounding box maximum Z.
+</ParamField>
+
+<ParamField path="block.draw" type="number" default="0">
+  Draw method. `0` = opaque, `1` = transparent, `2` = translucent, `3` = sprite, `4` = gas.
+</ParamField>
+
+<ParamField path="block.fogDensity" type="number" default="0">
+  Fog density inside the block. `0` means no fog.
+</ParamField>
+
+<ParamField path="block.fogR" type="number" default="0">
+  Red component of fog colour (0–255).
+</ParamField>
+
+<ParamField path="block.fogG" type="number" default="0">
+  Green component of fog colour (0–255).
+</ParamField>
+
+<ParamField path="block.fogB" type="number" default="0">
+  Blue component of fog colour (0–255).
+</ParamField>
+
+```javascript
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("BlockDefinitionsExtended")) {
+    const ext = client.extensions.get("BlockDefinitionsExtended")
+    ext.defineBlock({
+      id: 60,
+      name: "Half Slab",
+      collision: 1,
+      topTexture: 5,
+      leftTexture: 6,
+      rightTexture: 6,
+      frontTexture: 6,
+      backTexture: 6,
+      bottomTexture: 5,
+      minX: 0,
+      minY: 0,
+      minZ: 0,
+      maxX: 16,
+      maxY: 8,
+      maxZ: 16,
+      draw: 0,
+    })
+  }
+})
+```

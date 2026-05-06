@@ -1,0 +1,280 @@
+---
+title: "Defining custom blocks with CPE extensions"
+description: "How to use BlockDefinitions, BlockDefinitionsExtended, CustomBlocks, BlockPermissions, InventoryOrder, and SetHotbar to add custom blocks to your server."
+---
+
+Three CPE extensions work together to add custom blocks to your server: `CustomBlocks` declares the custom block support level to the client, `BlockDefinitions` sends each block's visual and physical properties, and `BlockDefinitionsExtended` provides additional per-face textures and a custom bounding box. Two further extensions — `BlockPermissions` and `InventoryOrder` — control how players interact with blocks in the inventory.
+
+## Declaring custom block support
+
+The `CustomBlocks` extension (`CustomBlocks` CPE) must be used to tell the client which level of custom block support is active. Call `sendSupportLevel` with the level number before sending any block definitions:
+
+```js
+if (client.extensions.has("CustomBlocks")) {
+  const customBlocks = client.extensions.get("CustomBlocks")
+  customBlocks.sendSupportLevel(1)
+}
+```
+
+The `supportLevel` parameter is a number indicating the maximum custom block feature level the server is using. Use `1` for standard custom block support.
+
+## Defining blocks with `BlockDefinitions`
+
+The `BlockDefinitions` extension (`BlockDefinitions` CPE) sends a full block definition to the client. Call `defineBlock` once per custom block:
+
+```js
+const blockDefs = client.extensions.get("BlockDefinitions")
+blockDefs.defineBlock({
+  id: 50,
+  name: "Glowstone",
+  collision: 2,
+  speed: 128,
+  topTexture: 20,
+  sideTexture: 20,
+  bottomTexture: 20,
+  transmitLight: 0,
+  walkSound: 3,
+  fullBright: 1,
+  shape: 16,
+  draw: 0,
+  fogDensity: 0,
+  fogR: 0,
+  fogG: 0,
+  fogB: 0,
+})
+```
+
+The `defineBlock` method accepts an object with the following fields:
+
+<ParamField path="id" type="number">
+  The block ID to define. Must be a value that the vanilla protocol does not already use.
+</ParamField>
+
+<ParamField path="name" type="string">
+  The display name for the block shown in the client's inventory.
+</ParamField>
+
+<ParamField path="collision" type="number" default="2">
+  Collision behaviour. Typical values: `0` = walk-through (gas/liquid), `1` = swim-through (liquid), `2` = solid.
+</ParamField>
+
+<ParamField path="speed" type="number" default="128">
+  Movement speed modifier when the player is inside or on top of the block. `128` is normal speed.
+</ParamField>
+
+<ParamField path="topTexture" type="number" default="0">
+  Texture index for the top face of the block.
+</ParamField>
+
+<ParamField path="sideTexture" type="number" default="0">
+  Texture index applied to all four side faces. Overridden by per-face values from `BlockDefinitionsExtended`.
+</ParamField>
+
+<ParamField path="bottomTexture" type="number" default="0">
+  Texture index for the bottom face of the block.
+</ParamField>
+
+<ParamField path="transmitLight" type="number" default="0">
+  Whether the block lets light through. `1` = transparent, `0` = opaque.
+</ParamField>
+
+<ParamField path="walkSound" type="number" default="0">
+  The sound played when walking on the block. `0` = none, `1` = stone, `2` = cloth, `3` = sand, `4` = glass, `5` = metal, `6` = grass, `7` = gravel, `8` = wood.
+</ParamField>
+
+<ParamField path="fullBright" type="number" default="0">
+  Whether the block emits full-brightness light. `1` = bright, `0` = normal.
+</ParamField>
+
+<ParamField path="shape" type="number" default="16">
+  The height of the block in units where 16 = one full block. Used for slab-height geometry.
+</ParamField>
+
+<ParamField path="draw" type="number" default="0">
+  Rendering mode. `0` = opaque, `1` = transparent, `2` = transparent (no back-face cull), `3` = translucent, `4` = gas (no geometry).
+</ParamField>
+
+<ParamField path="fogDensity" type="number" default="0">
+  Fog density when the camera is inside this block. `0` = no fog.
+</ParamField>
+
+<ParamField path="fogR" type="number" default="0">
+  Red component of the fog colour (0–255).
+</ParamField>
+
+<ParamField path="fogG" type="number" default="0">
+  Green component of the fog colour (0–255).
+</ParamField>
+
+<ParamField path="fogB" type="number" default="0">
+  Blue component of the fog colour (0–255).
+</ParamField>
+
+## Defining blocks with extended geometry
+
+The `BlockDefinitionsExtended` extension (`BlockDefinitionsExt` CPE, version 2) replaces the single `sideTexture` field with four individual face textures and adds a custom bounding box. Use it with clients that support the `BlockDefinitionsExt` extension instead of (or in addition to) `BlockDefinitions`:
+
+```js
+if (client.extensions.has("BlockDefinitionsExtended")) {
+  const blockDefsExt = client.extensions.get("BlockDefinitionsExtended")
+  blockDefsExt.defineBlock({
+    id: 51,
+    name: "Crate",
+    collision: 2,
+    speed: 128,
+    topTexture: 25,
+    leftTexture: 26,
+    rightTexture: 26,
+    frontTexture: 27,
+    backTexture: 27,
+    bottomTexture: 25,
+    transmitLight: 0,
+    walkSound: 8,
+    fullBright: 0,
+    minX: 0, minY: 0, minZ: 0,
+    maxX: 16, maxY: 16, maxZ: 16,
+    draw: 0,
+    fogDensity: 0,
+    fogR: 0,
+    fogG: 0,
+    fogB: 0,
+  })
+}
+```
+
+The additional fields are:
+
+<ParamField path="leftTexture" type="number" default="0">
+  Texture index for the left face (west, -X direction).
+</ParamField>
+
+<ParamField path="rightTexture" type="number" default="0">
+  Texture index for the right face (east, +X direction).
+</ParamField>
+
+<ParamField path="frontTexture" type="number" default="0">
+  Texture index for the front face (south, +Z direction).
+</ParamField>
+
+<ParamField path="backTexture" type="number" default="0">
+  Texture index for the back face (north, -Z direction).
+</ParamField>
+
+<ParamField path="minX" type="number" default="0">
+  Minimum X bound of the block's hitbox, in 16ths of a block (0–15).
+</ParamField>
+
+<ParamField path="minY" type="number" default="0">
+  Minimum Y bound of the block's hitbox.
+</ParamField>
+
+<ParamField path="minZ" type="number" default="0">
+  Minimum Z bound of the block's hitbox.
+</ParamField>
+
+<ParamField path="maxX" type="number" default="16">
+  Maximum X bound of the block's hitbox.
+</ParamField>
+
+<ParamField path="maxY" type="number" default="16">
+  Maximum Y bound of the block's hitbox.
+</ParamField>
+
+<ParamField path="maxZ" type="number" default="16">
+  Maximum Z bound of the block's hitbox.
+</ParamField>
+
+## Controlling block permissions
+
+The `BlockPermissions` extension (`BlockPermissions` CPE) lets you control whether players can place or delete specific blocks. This is useful for protecting custom blocks that should only be placed by server logic:
+
+```js
+if (client.extensions.has("BlockPermissions")) {
+  const perms = client.extensions.get("BlockPermissions")
+  // Prevent players from placing or deleting block ID 50
+  perms.setBlockPermission(50, 0, 0)
+}
+```
+
+<ParamField path="id" type="number">
+  The block ID to configure.
+</ParamField>
+
+<ParamField path="allowPlacement" type="number">
+  `1` to allow placement, `0` to deny.
+</ParamField>
+
+<ParamField path="allowDeletion" type="number">
+  `1` to allow deletion, `0` to deny.
+</ParamField>
+
+## Ordering the inventory
+
+The `InventoryOrder` extension (`InventoryOrder` CPE) controls where a block appears in the client's inventory list:
+
+```js
+if (client.extensions.has("InventoryOrder")) {
+  const inventory = client.extensions.get("InventoryOrder")
+  inventory.setInventoryOrder(50, 65) // Place block 50 at position 65 in the list
+}
+```
+
+## Setting hotbar slots
+
+The `SetHotbar` extension (`SetHotbar` CPE) assigns a specific block to a hotbar slot (0–8):
+
+```js
+if (client.extensions.has("SetHotbar")) {
+  const hotbar = client.extensions.get("SetHotbar")
+  hotbar.setHotbar(50, 0) // Put block 50 in hotbar slot 0
+}
+```
+
+## Complete example
+
+The following example sends a full custom block setup when a client connects, using all the relevant extensions:
+
+```js
+server.on("clientConnected", async (client, authInfo) => {
+  client.serverIdentification("My Server", "Welcome!", 0x00)
+  await client.loadLevel(levelBuffer, 256, 64, 256, true)
+  client.configureSpawn(0, authInfo.username, 128, 32, 128, 0, 0)
+
+  // Declare custom block support level
+  if (client.extensions.has("CustomBlocks")) {
+    client.extensions.get("CustomBlocks").sendSupportLevel(1)
+  }
+
+  // Define the custom block
+  if (client.extensions.has("BlockDefinitions")) {
+    client.extensions.get("BlockDefinitions").defineBlock({
+      id: 50,
+      name: "Glowstone",
+      collision: 2,
+      speed: 128,
+      topTexture: 20,
+      sideTexture: 20,
+      bottomTexture: 20,
+      transmitLight: 0,
+      walkSound: 3,
+      fullBright: 1,
+      shape: 16,
+      draw: 0,
+      fogDensity: 0,
+      fogR: 0,
+      fogG: 0,
+      fogB: 0,
+    })
+  }
+
+  // Prevent players from deleting it
+  if (client.extensions.has("BlockPermissions")) {
+    client.extensions.get("BlockPermissions").setBlockPermission(50, 1, 0)
+  }
+
+  // Place it in the hotbar
+  if (client.extensions.has("SetHotbar")) {
+    client.extensions.get("SetHotbar").setHotbar(50, 0)
+  }
+})
+```

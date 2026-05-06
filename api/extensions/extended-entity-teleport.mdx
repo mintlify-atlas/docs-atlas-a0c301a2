@@ -1,0 +1,74 @@
+---
+title: "ExtendedEntityTeleport — CPE extension API"
+description: "API reference for ExtendedEntityTeleport: teleport entities with configurable behavior flags using a TeleportBehavior instance and fixed-point coordinates."
+---
+
+`ExtendedEntityTeleport` replaces the standard absolute position update packet with an extended variant that carries a `TeleportBehavior` byte. The behavior byte controls client-side effects such as whether the teleport interpolates smoothly or snaps instantly and whether the client's look direction is preserved.
+
+This class extends `BaseExtension`, so every instance exposes a `client` property pointing to the owning `Client` and a `version` property for the negotiated extension version.
+
+**CPE name:** `ExtEntityTeleport`
+
+```javascript
+import { extensions } from "classicborne-server-protocol"
+```
+
+```javascript
+const ext = client.extensions.get("ExtendedEntityTeleport")
+```
+
+## Static properties
+
+**`ExtendedEntityTeleport.extendedTeleportPacketIdentifier`** — `0x36`. The packet type byte written at the start of every `extendedPositionUpdate` packet.
+
+## Methods
+
+### `extendedPositionUpdate`
+
+```javascript
+ext.extendedPositionUpdate(id, x, y, z, yaw, pitch, teleportBehavior)
+```
+
+Sends an extended entity teleport packet for the given entity.
+
+<ParamField path="id" type="number" required>
+  The entity ID to teleport. Use `-1` or `0` for the local player.
+</ParamField>
+
+<ParamField path="x" type="number" required>
+  X coordinate. Converted to fixed-point units internally (1 block = 32 units).
+</ParamField>
+
+<ParamField path="y" type="number" required>
+  Y coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="z" type="number" required>
+  Z coordinate in fixed-point units.
+</ParamField>
+
+<ParamField path="yaw" type="number" required>
+  Yaw angle as a byte (0–255).
+</ParamField>
+
+<ParamField path="pitch" type="number" required>
+  Pitch angle as a byte (0–255).
+</ParamField>
+
+<ParamField path="teleportBehavior" type="TeleportBehavior" required>
+  A [`TeleportBehavior`](/api/teleport-behavior) instance that encodes the behavior flags byte. Controls interpolation, use-position, and use-orientation flags.
+</ParamField>
+
+```javascript
+import { TeleportBehavior } from "classicborne-server-protocol"
+
+server.on("clientConnected", (client) => {
+  if (client.extensions.has("ExtendedEntityTeleport")) {
+    const ext = client.extensions.get("ExtendedEntityTeleport")
+    const behavior = new TeleportBehavior()
+    behavior.usePosition = true
+    behavior.useOrientation = true
+    ext.extendedPositionUpdate(0, 128 * 32, 32 * 32, 128 * 32, 0, 0, behavior)
+  }
+})
+```
